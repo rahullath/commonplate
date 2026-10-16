@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% set hide_wa = true %}
+{% block meta %}
+<meta name="robots" content="noindex">
+<title>Pay for order #{{ order.id }} · {{ biz.name }}</title>
+{% endblock %}
+{% block fonts %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+{% endblock %}
+{% block styles %}{% endblock %}
+{% block body %}
+<style>
+  body { background: #FBF8F2; font-family: 'IBM Plex Sans', system-ui, sans-serif; }
+  .pay-foot, .pay-ivepaid, .pay-btn, button { font-family: inherit; }
+  .site-wa { display: none !important; }
+  .pay-wrap { max-width: 440px; margin: 0 auto; padding: 22px 18px 150px; font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #171A14; }
+  .pay-card { background: none; border: none; padding: 0; }
+  .pay-kicker { display: flex; align-items: center; gap: 9px; font: 600 12px/1 'IBM Plex Mono', monospace; color: #171A14; letter-spacing: .05em; text-transform: uppercase; }
+  .pay-kicker img { width: 28px; height: 28px; object-fit: contain; }
+  .pay-head { text-align: center; padding-top: 40px; }
+  .pay-head .lbl { font-size: 14px; color: #5C6157; }
+  .pay-amount { font-family: 'Bricolage Grotesque', sans-serif; font-size: 58px; line-height: 1; font-weight: 700; letter-spacing: -.02em; margin: 6px 0 0; text-align: center; }
+  .pay-sub { font-size: 14px; color: #5C6157; line-height: 1.5; text-align: center; margin: 10px 0 0; }
+  .pay-label { margin-top: 34px; font: 600 11.5px/1 'IBM Plex Mono', monospace; color: #5C6157; letter-spacing: .05em; }
+  .pay-apps { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+  .pay-btn { display: flex; align-items: center; gap: 14px; text-decoration: none; border-radius: 14px; padding: 0 16px; min-height: 60px; font-size: 16px; font-weight: 600; border: 1px solid #DED7C8; color: #171A14; background: #fff; }
+  .pay-btn .go { margin-left: auto; font: 600 11px/1 'IBM Plex Mono', monospace; color: #0E7A45; }
+  .pay-btn.primary { border: 2px solid #171A14; }
+  .pay-ico { width: 34px; height: 34px; border-radius: 8px; background: #F3EFE7; display: flex; align-items: center; justify-content: center; font: 700 12px/1 'IBM Plex Mono', monospace; color: #5C6157; flex: none; }
+  .pay-other { display: flex; gap: 14px; align-items: center; margin-top: 16px; padding: 14px; border-radius: 14px; background: #F3EFE7; }
+  .pay-qr { width: 76px; height: 76px; border-radius: 10px; background: #fff; flex: none; overflow: hidden; }
+  .pay-qr svg { width: 76px; height: 76px; display: block; }
+  .pay-other b { font-size: 13.5px; font-weight: 600; }
+  .pay-other .s { font-size: 12.5px; color: #5C6157; margin-top: 3px; }
+  .pay-vpa { display: flex; gap: 10px; align-items: center; margin-top: 8px; font: 500 13px 'IBM Plex Mono', monospace; }
+  .pay-vpa button { border: none; background: none; font-size: 13px; font-weight: 600; color: #0E7A45; cursor: pointer; padding: 8px 0; }
+  .pay-foot { position: fixed; left: 0; right: 0; bottom: 0; background: linear-gradient(rgba(251,248,242,0), #FBF8F2 28%); padding: 16px 18px calc(22px + env(safe-area-inset-bottom)); text-align: center; }
+  .pay-foot-in { max-width: 404px; margin: 0 auto; }
+  .pay-ivepaid { display: flex; align-items: center; justify-content: center; min-height: 50px; border-radius: 14px; border: 1.5px solid #171A14; background: #FBF8F2; font-size: 15px; font-weight: 600; text-decoration: none; color: #171A14; }
+  .pay-foot p { margin: 10px 0 0; font-size: 13px; color: #5C6157; }
+  .pay-paid { display: flex; justify-content: center; padding-top: 40px; }
+  .pay-tick { width: 56px; height: 56px; border-radius: 50%; background: #0E7A45; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 26px; }
+  .pay-links { text-align: center; margin-top: 26px; font-size: 14.5px; }
+  .pay-links a { color: #0E7A45; font-weight: 600; text-decoration: none; padding: 10px; display: inline-block; }
+</style>
+<div class="pay-wrap">
+  <div class="pay-card">
+    <div class="pay-kicker"><img src="/static/logo.png" alt="">{{ biz.name }} · order #{{ order.id }}</div>
+    {% if state == "paid" %}
+      <div class="pay-paid"><div class="pay-tick">✓</div></div>
+      <div class="pay-amount" style="font-size:36px;margin-top:16px">₹{{ amount_text }} paid</div>
+      <p class="pay-sub">Order #{{ order.id }} · thank you. Updates come on WhatsApp.</p>
+      <a class="pay-btn primary" href="/track/{{ order.tracking_token }}" style="justify-content:center;margin-top:24px;background:#0E7A45;border-color:#0E7A45;color:#fff">Track order</a>
+    {% elif state == "cash" %}
+      <div class="pay-amount">₹{{ amount_text }}</div>
+      <p class="pay-sub">This order is <b>cash {{ "at pickup" if order.order_type == "pickup" else "on delivery" }}</b>, nothing to pay now.</p>
+    {% elif state == "cancelled" %}
+      <div class="pay-amount">Cancelled</div>
+      <p class="pay-sub">This order was cancelled, so there's nothing to pay.</p>
+    {% elif state == "no_upi" %}
+      <div class="pay-amount">₹{{ amount_text }}</div>
+      <p class="pay-sub">UPI isn't set up right now. Please pay {{ "at pickup" if order.order_type == "pickup" else "the rider" }}.</p>
+    {% else %}
+      <div class="pay-head"><div class="lbl">Amount due</div></div>
+      <div class="pay-amount">₹{{ amount_text }}</div>
+      <p class="pay-sub">to <b>{{ payee }}</b> for {{ items_text }}</p>
+      <div class="pay-label">PAY WITH</div>
+      <div class="pay-apps">
+        <a class="pay-btn primary" id="pay-any" href="{{ links.any }}"><span class="pay-ico">UPI</span>Any UPI app<span class="go">OPENS APP →</span></a>
+        <a class="pay-btn" id="pay-gpay" href="{{ links.gpay_android }}" data-ios="{{ links.gpay_ios }}"><span class="pay-ico">G</span>Google Pay</a>
+        <a class="pay-btn" href="{{ links.phonepe }}"><span class="pay-ico">Pe</span>PhonePe</a>
+        <a class="pay-btn" href="{{ links.paytm }}"><span class="pay-ico">Pt</span>Paytm</a>
+      </div>
+      <div class="pay-other">
+        {% if qr_svg %}<div class="pay-qr" aria-label="UPI QR code">{{ qr_svg | safe }}</div>{% endif %}
+        <div><b>Paying from another phone?</b><div class="s">Scan, or copy the UPI ID</div>
+          <div class="pay-vpa"><span id="vpa">{{ vpa }}</span><button type="button" id="copy-vpa">Copy</button></div></div>
+      </div>
+    {% endif %}
+    {% if state not in ("due", "paid") %}<div class="pay-links"><a href="/track/{{ order.tracking_token }}">Track your order →</a></div>{% endif %}
+  </div>
+</div>
+{% if state == "due" %}
+<div class="pay-foot"><div class="pay-foot-in">
+  <a class="pay-ivepaid" href="/track/{{ order.tracking_token }}">I've paid</a>
+  <p>The kitchen confirms on WhatsApp within a few minutes.</p>
+</div></div>
+{% endif %}
+{% if state == "due" %}
+<script>
+  (function () {
+    var ua = navigator.userAgent || "";
+    var isIOS = /iPhone|iPad|iPod/i.test(ua), isAndroid = /Android/i.test(ua);
+    if (isIOS) {
+      document.querySelectorAll("[data-ios]").forEach(function (a) { a.style.display = "none"; });
+      var g = document.getElementById("pay-gpay"); if (g) g.style.display = "none";
+      // iPhones have no "any UPI app" chooser: lead with GPay.
+      var any = document.getElementById("pay-any");
+      any.href = {{ links.gpay_ios | tojson }}; any.textContent = "Pay with GPay";
+    }
+    document.getElementById("copy-vpa").addEventListener("click", function () {
+      var v = document.getElementById("vpa").textContent;
+      (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(function () {
+        document.getElementById("copy-vpa").textContent = "Copied";
+      }).catch(function () {});
+    });
+    // Android: open the UPI app chooser straight away (once per visit).
+    var seen = false;
+    try { seen = !!sessionStorage.getItem("tf-pay-{{ order.id }}"); sessionStorage.setItem("tf-pay-{{ order.id }}", "1"); } catch (e) {}
+    if (isAndroid && !seen) {
+      setTimeout(function () { location.href = {{ links.any | tojson }}; }, 350);
+    }
+  })();
+</script>
+{% endif %}
+{% endblock %}

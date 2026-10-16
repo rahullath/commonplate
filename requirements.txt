@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+jinja2
+python-multipart
+httpx
+python-dotenv
+segno==1.6.6

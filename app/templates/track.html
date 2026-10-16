@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+{% set hide_wa = true %}
+{% block meta %}
+<meta name="description" content="Track your {{ biz.name }} order: live status, estimated arrival, payment and price breakdown.">
+<title>Order #{{ order_id }} · {{ biz.name }}</title>
+{% endblock %}
+{% block fonts %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+{% endblock %}
+{% block styles %}{% endblock %}
+{% block body %}
+<style>
+  body { background: #FBF8F2; font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #171A14; margin: 0; }
+  .wrap { max-width: 520px; margin: 0 auto; padding: 18px 18px 48px; }
+  .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  .top img { height: 40px; }
+  .back { color: #4a5a3a; text-decoration: none; font-size: 14px; }
+  .card { background: #fff; border: 1px solid #e6e8e0; border-radius: 16px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  .card h1 { font-family: 'Fraunces', serif; font-size: 24px; margin: 0 0 4px; }
+  .sub { color: #667; font-size: 14px; margin: 0 0 20px; }
+  .stepper { display: flex; flex-direction: column; gap: 0; margin: 8px 0 20px; }
+  .step { display: flex; gap: 12px; align-items: flex-start; position: relative; padding-bottom: 18px; }
+  .step:last-child { padding-bottom: 0; }
+  .dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #cfd6c2; background: #fff; margin-top: 2px; flex-shrink: 0; }
+  .step.done .dot { background: #4a7c2f; border-color: #4a7c2f; }
+  .step.current .dot { background: #f5c518; border-color: #f5c518; box-shadow: 0 0 0 4px rgba(245,197,24,.2); }
+  .step .lbl { font-size: 15px; font-weight: 600; }
+  .step .desc { font-size: 13px; color: #667; margin-top: 2px; }
+  .step:not(:last-child)::before { content: ''; position: absolute; left: 6px; top: 16px; width: 2px; height: calc(100% - 18px); background: #e6e8e0; }
+  .meta { font-size: 14px; line-height: 1.7; }
+  .meta b { color: #1a1a1a; }
+  .row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; }
+  .items { border-top: 1px solid #eef0e8; margin-top: 12px; padding-top: 12px; font-size: 14px; color: #444; }
+  .pay { margin-top: 16px; padding: 14px; background: #f3f6ec; border-radius: 12px; font-size: 14px; line-height: 1.6; }
+  .err { color: #b3261e; background: #fdecea; padding: 14px; border-radius: 10px; font-size: 14px; }
+  .btn { display: inline-block; margin-top: 18px; background: #4a7c2f; color: #fff; text-decoration: none; padding: 12px 20px; border-radius: 10px; font-weight: 600; font-size: 14px; }
+  .btn:hover { background: #3d6828; }
+  .fresh { margin-top: 18px; font-size: 12.5px; color: #889; text-align: center; }
+  .chip { display: inline-block; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 5px 11px; margin-top: 8px; }
+  .chip.ready { background: #EDF6E2; color: #2C5A1E; }
+  .chip.pay { background: #F6F0E4; color: #7A5A12; }
+  .chip.done-pay { background: #EDF6E2; color: #2C5A1E; }
+  .chip.warn { background: #FDE8E4; color: #B3261E; }
+  .eta { margin: 2px 0 18px; font-size: 14px; color: #46732E; font-weight: 500; }
+  .meta { font-size: 14px; line-height: 1.7; }
+  .meta b { color: #1a1a1a; }
+  .row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; }
+  .row.total { font-weight: 700; border-top: 1px solid #EEF0E8; margin-top: 6px; padding-top: 8px; }
+  .row-note { font-size: 11.5px; color: #889; text-align: right; margin-top: 2px; }
+  .items { border-top: 1px solid #eef0e8; margin-top: 12px; padding-top: 12px; font-size: 14px; color: #444; }
+  .timeline { border-top: 1px solid #eef0e8; margin-top: 14px; padding-top: 12px; font-size: 13px; color: #555; display: flex; flex-direction: column; gap: 5px; }
+  .timeline div { display: flex; justify-content: space-between; gap: 12px; }
+  .pr-list { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+  .pr { display: inline-block; background: #fff; border: 1px solid #DDE2D4; border-radius: 10px; padding: 11px 16px; font-size: 14px; font-weight: 600; text-decoration: none; color: var(--ink, #1a1a1a); text-align: center; }
+  .pr.wa { background: #25D366; border-color: #25D366; color: #fff; }
+  .pr.phone { border-color: #E6E8E0; }
+  .empty { color: #889; font-size: 13px; }
+  .fee-box { margin-top: 14px; background: #FFF7EA; border: 1px solid #F1DDB8; border-radius: 12px; padding: 12px 14px; font-size: 13px; line-height: 1.55; color: #5A4520; }
+  .rate { margin-top: 16px; background: #fff; border: 1px solid #DDE2D4; border-radius: 14px; padding: 14px 16px; }
+  .rate h3 { font-size: 16px; margin: 0 0 4px; }
+  .rate .sub { font-size: 13px; color: #667; margin-bottom: 10px; }
+  .rate-dish { border-top: 1px solid #EEF0E8; padding: 10px 0; }
+  .rate-dish .nm { font-size: 14px; font-weight: 600; }
+  .stars { display: flex; gap: 4px; margin: 6px 0; }
+  .stars button { font-size: 28px; line-height: 1; background: none; border: 0; color: #D5D2C8; cursor: pointer; padding: 2px; }
+  .stars button.on { color: #E08A1E; }
+  .rate textarea { width: 100%; box-sizing: border-box; border: 1px solid #DDE2D4; border-radius: 8px; padding: 8px; font: inherit; font-size: 13px; min-height: 40px; }
+  .rate .send { display: block; width: 100%; margin-top: 10px; background: #0E7A45; color: #fff; border: 0; border-radius: 10px; padding: 12px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  .rate .send:disabled { background: #B9B2A2; }
+  .fee-box .pr { display: block; margin-top: 10px; background: #0E7A45; color: #fff; border-color: #0E7A45; }
+  .th { background: #0E7A45; color: #fff; padding: 22px 20px 24px; }
+  .th-in { max-width: 520px; margin: 0 auto; }
+  .th-top { display: flex; justify-content: space-between; align-items: center; }
+  .th-top span { font: 600 12px/1 'IBM Plex Mono', monospace; letter-spacing: .05em; opacity: .85; }
+  .th-top img { width: 28px; height: 28px; object-fit: contain; background: #FBF8F2; border-radius: 7px; padding: 2px; }
+  .th h1 { font-family: 'Bricolage Grotesque', sans-serif; font-size: 34px; line-height: 1; font-weight: 700; margin: 22px 0 0; }
+  .th-eta { margin-top: 8px; font-size: 16px; opacity: .92; }
+  .th-btn { display: flex; align-items: center; justify-content: center; margin-top: 18px; min-height: 50px; border-radius: 13px; background: #fff; color: #0E7A45; font-size: 15.5px; font-weight: 600; text-decoration: none; }
+  .th.cx { background: #FBF8F2; color: #171A14; border-bottom: 1px solid #ECE6DA; }
+  .th.cx .th-top span { color: #9A3324; opacity: 1; }
+  .th.cx h1 { font-size: 26px; }
+  .stars button { min-width: 44px; min-height: 44px; font-size: 32px; }
+  .rate-dish { background: #fff; }
+  .th-btn:empty, .th-btn[hidden] { display: none; }
+  .card > h1, #status-note, #eta-line { display: none; }
+  .card { border-radius: 16px; border-color: #ECE6DA; box-shadow: none; padding: 20px; }
+  .step { padding-bottom: 14px; }
+  .step .lbl { font-size: 15px; }
+  .step.done .dot { background: #0E7A45; border-color: #0E7A45; }
+  .step.current .dot { background: #fff; border: 4px solid #0E7A45; box-shadow: none; width: 18px; height: 18px; margin: 0 -2px 0 -2px; box-sizing: border-box; }
+  .step:not(:last-child)::before { background: #DED7C8; }
+  .step.done:not(:last-child)::before { background: #0E7A45; }
+  .step .desc { display: none; }
+  .step.current .desc { display: block; }
+  .pr.wa { background: #fff; border-color: #DED7C8; color: #0E7A45; min-height: 48px; display: flex; align-items: center; justify-content: center; }
+  .pr { min-height: 52px; padding: 0 16px; display: flex !important; align-items: center; justify-content: center; border-radius: 14px; }
+  .step { margin: 0; padding: 0 0 18px; align-items: flex-start; }
+  .step:last-child { padding-bottom: 0; }
+  .step .dot { margin: 3px 0 0; }
+  .step.current .dot { margin: 1px -2px 0 -2px; }
+  .step::before { left: 6px; }
+  .step.current::before { left: 7px; }
+  .row { gap: 16px; align-items: flex-start; }
+  .row > span { flex: none; color: #6F7468; }
+  .row > b { text-align: right; font-weight: 600; min-width: 0; }
+  .card { padding: 20px 18px; }
+  .th h1 { margin-top: 18px; }
+</style>
+<header class="th"><div class="th-in">
+  <div class="th-top"><span>ORDER #{{ order_id }}</span><img src="/static/logo.png" alt="{{ biz.name }}"></div>
+  <h1 id="th-title">Loading…</h1>
+  <div class="th-eta" id="th-eta"></div>
+  <a class="th-btn" id="th-btn" href="#" target="_blank" rel="noopener" hidden>Follow the rider live ↗</a>
+</div></header>
+<div class="wrap">
+  <div class="card" id="card">
+    <h1>Order #{{ order_id }}</h1>
+    <p class="sub" id="status-note">Loading your order…</p>
+    <div id="content"></div>
+    <div id="rate"></div>
+  </div>
+  <p class="fresh">This page updates by itself, so you can keep it open.<br>Questions? Call <a href="tel:{{ biz.phone_e164 }}">{{ biz.phone_local }}</a></p>
+</div>
+<script>
+  const STATUSES = [
+    ["new", "Order placed", "We've received your order."],
+    ["preparing", "Being cooked", "Fresh in the kitchen."],
+    ["ready", "Ready", "Packed & waiting for the rider."],
+    ["out_for_delivery", "On the way", "Your rider is heading to you."],
+    ["delivered", "Delivered", "Enjoy your meal!"],
+  ];
+  const CANCELED = "cancelled";
+  const ORDER_ID = {{ order_id }};
+  const TRACKING_TOKEN = {{ tracking_token | tojson }};
+  const UPI_VPA = {{ (upi_vpa or "") | tojson }};
+  const UPI_PAYEE = {{ (upi_payee_name or "") | tojson }};
+  function upiLink(amount, ref, note) {
+    if (!UPI_VPA) return "";
+    const p = new URLSearchParams({ pa: UPI_VPA, pn: UPI_PAYEE, am: String(amount), cu: "INR", tr: ref, tn: note });
+    return "upi://pay?" + p.toString();
+  }
+
+  function toDate(s) {
+    if (!s) return null;
+    return new Date(s.includes("Z") || s.includes("+") ? s : s.replace(" ", "T") + "Z");
+  }
+  const timeFmt = { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" };
+  const dayFmt = { weekday: "short", day: "numeric", month: "short", timeZone: "Asia/Kolkata" };
+  const fullFmt = { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" };
+  const fmtTime = (s) => { const d = toDate(s); return d ? d.toLocaleString("en-IN", timeFmt) : ""; };
+  const fmtDay = (s) => { const d = toDate(s); return d ? d.toLocaleString("en-IN", dayFmt) : ""; };
+
+  function eta(o) {
+    if (o.status === "delivered" || o.status === CANCELED) return null;
+    if (o.scheduled_at) return o.scheduled_window
+      ? `Scheduled for the ${o.scheduled_window === "lunch" ? "Lunch" : "Dinner"} window. The kitchen will send it out during that window.`
+      : "Scheduled. The kitchen will send it out at your chosen time.";
+    const pickup = o.order_type === "pickup";
+    const table = {
+      new: pickup ? "~20–25 min from now" : "~40–60 min from now",
+      preparing: pickup ? "~15–20 min" : "~30–45 min",
+      ready: pickup ? "Ready for pickup now" : "~20–30 min",
+      out_for_delivery: "~10–20 min, rider is already on the way",
+    };
+    return table[o.status] ? "Estimated arrival: " + table[o.status] : null;
+  }
+
+  function payLabel(o) {
+    if (o.payment_method === "upi") return o.paid ? "Paid by UPI ✓" : "UPI, waiting for the kitchen to confirm";
+    return "Cash on delivery";
+  }
+
+  async function refresh() {
+    let o;
+    try {
+      const r = await fetch(`/api/orders/${TRACKING_TOKEN}`);
+      if (!r.ok) { document.getElementById('card').innerHTML = '<div class="err">Order not found.</div>'; return; }
+      o = await r.json();
+    } catch (e) { return; }
+
+    const st = o.status || 'new';
+    const statusDesc = (STATUSES.find(s => s[0] === st) || [,'',''])[2];
+    const noteEl = document.getElementById('status-note');
+    if (st === CANCELED) {
+      noteEl.textContent = 'This order was cancelled.';
+    } else {
+      noteEl.textContent = statusDesc;
+    }
+    const TITLES = { new: "Order placed", preparing: "Being cooked", ready: o.order_type === "pickup" ? "Ready for pickup" : "Ready, rider coming", out_for_delivery: "On its way", delivered: "Delivered", cancelled: "Cancelled" };
+    const pickupReady = st === "ready" && o.order_type === "pickup";
+    document.getElementById("th-title").textContent = pickupReady ? "Ready to collect" : (TITLES[st] || "Your order");
+    document.querySelector(".th").classList.toggle("cx", st === CANCELED);
+    document.querySelector(".th-top span").textContent = "ORDER #" + ORDER_ID + (st === CANCELED ? " · CANCELLED" : o.order_type === "pickup" ? " · PICKUP" : "");
+    const etaShort = { new: o.order_type === "pickup" ? "Ready in about 20–25 min" : "Arriving in about 40–60 min", preparing: o.order_type === "pickup" ? "Ready in about 15–20 min" : "Arriving in about 30–45 min", ready: o.order_type === "pickup" ? "{{ biz.pickup_line }}" : "Arriving in about 20–30 min", out_for_delivery: "Arriving in about 15 min", delivered: "Enjoy your meal", cancelled: o.paid ? "₹" + (+o.total).toFixed(2).replace(/\.00$/, "") + " goes back to your UPI account within 5–7 working days" : "Nothing to pay" };
+    document.getElementById("th-eta").textContent = (o.scheduled_at && st === "new") ? "Scheduled. We'll send it out in your window" : (etaShort[st] || "");
+    const thBtn = document.getElementById("th-btn"), liveUrl = o.sr_tracking_url || o.tracking_url;
+    thBtn.hidden = !((liveUrl && st === "out_for_delivery") || pickupReady);
+    if (pickupReady) { thBtn.textContent = "Directions ↗"; thBtn.href = "https://maps.google.com/?q={{ (biz.pickup_line ~ ', ' ~ biz.city) | replace(' ', '+') }}"; }
+    else { thBtn.textContent = "Follow the rider live ↗"; if (liveUrl) thBtn.href = liveUrl; }
+    const etaText = eta(o);
+    document.getElementById('eta-line')?.remove();
+    if (etaText && st !== CANCELED) {
+      noteEl.insertAdjacentHTML('afterend', `<div class="eta" id="eta-line">${etaText}</div>`);
+    }
+
+    let html = '';
+    if (st === CANCELED) {
+      html += '<div class="err">This order was cancelled. If you were charged, we\'ll refund you right away.</div><a class="pr" style="margin-top:12px;color:#0E7A45" href="/menu">Order again</a>';
+    } else {
+      html += '<div class="stepper">';
+      for (const [key, lbl, desc] of STATUSES) {
+        const idx = STATUSES.findIndex(s => s[0] === st);
+        const cur = STATUSES.findIndex(s => s[0] === key);
+        const cls = st === 'delivered' ? 'done' : (cur === idx ? 'current' : (cur < idx ? 'done' : ''));
+        html += `<div class="step ${cls}"><div class="dot"></div><div><div class="lbl">${lbl}</div><div class="desc">${desc}</div></div></div>`;
+      }
+      html += '</div>';
+    }
+
+    html += '<div class="meta">';
+    html += `<div class="row"><span>Order type</span><b>${o.order_type === 'pickup' ? 'Pickup · {{ biz.locality }}' : 'Delivery'}</b></div>`;
+    if (o.scheduled_at) {
+      const d = toDate(o.scheduled_at);
+      const windowText = o.scheduled_window === "lunch" ? "Lunch window ({{ win.lunch.text }})"
+        : o.scheduled_window === "dinner" ? "Dinner window ({{ win.dinner.text }})" : null;
+      html += `<div class="row"><span>Scheduled for</span><b>${windowText ? windowText + " · " + fmtDay(o.scheduled_at) : (d ? d.toLocaleString("en-IN", fullFmt) : fmtDay(o.scheduled_at))}</b></div>`;
+    } else {
+      html += `<div class="row"><span>Placed at</span><b>${fmtTime(o.created_at)}</b></div>`;
+    }
+    if (st === "out_for_delivery" || st === "delivered") {
+      html += `<div class="row"><span>Left the kitchen</span><b>${fmtTime(o.dispatched_at) || "—"}</b></div>`;
+    }
+    html += `<div class="row"><span>Payment</span><b>${payLabel(o)}</b></div>`;
+    if (o.payment_method === "upi" && !o.paid && o.status !== CANCELED) {
+      html += `<a class="pr" style="display:block;margin-top:10px;background:#0E7A45;color:#fff;border-color:#0E7A45" href="/pay/${TRACKING_TOKEN}">Pay ₹${(+o.total).toFixed(0)} with UPI →</a>`;
+    }
+    if (o.order_type === 'delivery' && o.delivery_address) html += `<div class="row"><span>Deliver to</span><b>${o.delivery_address.replace(/ \(Landmark:.*\)$/, "")}</b></div>`;
+    html += '</div>';
+
+    const subtotal = +o.subtotal || 0, packing = +o.packing_fee || 0;
+    const gst = +o.gst_amount || 0, fee = +o.delivery_fee || 0, total = +o.total || 0;
+    html += '<div class="timeline">';
+    html += `<div><span>Subtotal</span><span>₹${subtotal.toFixed(0)}</span></div>`;
+    if (+o.discount_total) html += `<div style="color:#0E7A45"><span>Discount${o.discount_code ? " (" + o.discount_code + ")" : ""}</span><span>−₹${(+o.discount_total).toFixed(0)}</span></div>`;
+    if (packing) html += `<div><span>Packing</span><span>₹${packing.toFixed(0)}</span></div>`;
+    if (gst) html += `<div><span>GST (5%)</span><span>₹${gst.toFixed(0)}</span></div>`;
+    const finalFee = +o.delivery_fee_final || 0;
+    const isDel = o.order_type === 'delivery';
+    if (isDel && finalFee) {
+      html += `<div style="font-weight:600;color:#1a1a1a"><span>Food total</span><span>₹${total.toFixed(0)}</span></div>`;
+      html += `<div><span>Delivery (Porter fare)</span><span>₹${finalFee.toFixed(0)}</span></div>`;
+      html += `<div style="font-weight:600;color:#1a1a1a"><span>Grand total</span><span>₹${(total + finalFee).toFixed(0)}</span></div>`;
+    } else if (isDel && o.delivery_fee_low) {
+      html += `<div style="font-weight:600;color:#1a1a1a"><span>Food total</span><span>₹${total.toFixed(0)}</span></div>`;
+      html += `<div><span>Delivery (estimate)</span><span>~₹${(+o.delivery_fee_low).toFixed(0)}–${(+o.delivery_fee_high).toFixed(0)}</span></div>`;
+    } else {
+      if (fee) html += `<div><span>${o.order_type === 'pickup' ? 'Packing/delivery' : 'Delivery'}</span><span>₹${fee.toFixed(0)}</span></div>`;
+      html += `<div style="font-weight:600;color:#1a1a1a"><span>Total</span><span>₹${total.toFixed(0)}</span></div>`;
+    }
+    html += '</div>';
+    if (isDel && st !== CANCELED) {
+      if (finalFee && !o.delivery_paid) {
+        const link = upiLink(finalFee, `${ORDER_ID}-D`, `{{ biz.name }} delivery #${ORDER_ID}`);
+        html += `<div class="fee-box"><b>Delivery charge: ₹${finalFee.toFixed(0)}</b><br>
+          This is the actual Porter fare for your rider, nothing added.${link ? "" : " Please pay it to the kitchen by UPI or cash."}
+          ${link ? `<a class="pr" href="${link}">Pay ₹${finalFee.toFixed(0)} by UPI →</a>` : ""}</div>`;
+      } else if (!finalFee && o.delivery_fee_low) {
+        html += `<div class="fee-box">The delivery charge is the actual fare of the rider we book for you,
+          usually ₹${(+o.delivery_fee_low).toFixed(0)}–${(+o.delivery_fee_high).toFixed(0)} for your area.
+          You'll get the exact amount here and by message as soon as the rider is booked.</div>`;
+      }
+    }
+
+    if (o.items && o.items.length) {
+      html += '<div class="items">' + o.items.map(i => `<div class="row"><span>${i.name} × ${i.qty}</span><span>₹${(+i.price * +i.qty).toFixed(0)}</span></div>`).join('') + '</div>';
+    }
+
+    html += '<div class="pr-list">';
+    if (o.tracking_url || o.sr_tracking_url) {
+      if (st !== "out_for_delivery") html += `<a class="pr" href="${o.sr_tracking_url || o.tracking_url}" target="_blank" rel="noopener">Track rider live</a>`;
+    } else if ((st === "out_for_delivery" || st === "delivered") && !o.sr_tracking_url && !o.tracking_url) {
+      html += '<div class="empty">Rider tracking will appear here once available.</div>';
+    }
+    html += `<a class="pr wa" href="https://wa.me/{{ wa_order_number }}?text=${encodeURIComponent('Hi {{ biz.name }}, I have a question about order #' + ORDER_ID)}" target="_blank" rel="noopener">Message us on WhatsApp</a>`;
+    if (o.order_type === "pickup") {
+      html += '<div class="empty" style="margin-top:2px">Pickup: {{ biz.pickup_line }}</div>';
+    }
+    html += '</div>';
+
+    document.getElementById('content').innerHTML = html;
+    renderRating(o);
+  }
+
+  // Dish ratings once delivered: shown on each dish's page (verified orders
+  // only). Rendered once into #rate so the 10 s refresh never wipes it.
+  let rateShown = false;
+  function renderRating(o) {
+    if (rateShown || o.status !== "delivered" || !o.items || !o.items.length) return;
+    const done = new Set(o.reviewed_items || []);
+    const base = id => id.replace(/__half$/, "");
+    const dishes = [];
+    o.items.forEach(i => { const b = base(i.item_id); if (!done.has(b) && !dishes.some(d => d.id === b)) dishes.push({ id: b, name: i.name.replace(/ \(Half\)$/, "") }); });
+    if (!dishes.length) return;
+    rateShown = true;
+    const box = document.getElementById("rate");
+    box.innerHTML = `<div class="rate" id="rate-box"><h3>How was your food?</h3>
+      <div class="sub">Tap the stars for each dish. Your rating and comment appear on the dish's page with your first name.</div>
+      ${dishes.map(d => `<div class="rate-dish" data-id="${d.id}"><div class="nm">${d.name}</div>
+        <div class="stars">${[1,2,3,4,5].map(n => `<button type="button" data-n="${n}" aria-label="${n} star${n > 1 ? "s" : ""}">★</button>`).join("")}</div>
+        <textarea maxlength="500" placeholder="What did you like? (optional)"></textarea></div>`).join("")}
+      <button class="send" id="rate-send" disabled>Send ratings</button></div>`;
+    const picked = {};
+    box.querySelectorAll(".rate-dish").forEach(row => {
+      row.querySelectorAll(".stars button").forEach(btn => btn.addEventListener("click", () => {
+        const n = +btn.dataset.n; picked[row.dataset.id] = n;
+        row.querySelectorAll(".stars button").forEach(b => b.classList.toggle("on", +b.dataset.n <= n));
+        document.getElementById("rate-send").disabled = false;
+      }));
+    });
+    document.getElementById("rate-send").addEventListener("click", async (e) => {
+      e.target.disabled = true; e.target.textContent = "Sending…";
+      const ratings = [...box.querySelectorAll(".rate-dish")].filter(r => picked[r.dataset.id])
+        .map(r => ({ item_id: r.dataset.id, rating: picked[r.dataset.id], comment: r.querySelector("textarea").value }));
+      try {
+        const r = await fetch(`/api/orders/${TRACKING_TOKEN}/review`, { method: "POST",
+          headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ratings }) });
+        if (!r.ok) throw new Error();
+        document.getElementById("rate-box").innerHTML = "<h3>Thank you! 🙏</h3><div class='sub'>Your ratings help other people choose, and tell the kitchen what to keep doing.</div>";
+      } catch (_) { e.target.disabled = false; e.target.textContent = "Couldn't send. Try again"; }
+    });
+    if (location.hash === "#rate") box.scrollIntoView({ behavior: "smooth" });
+  }
+  refresh();
+  setInterval(refresh, 10000);
+</script>
+{% endblock %}

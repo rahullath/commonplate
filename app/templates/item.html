@@ -1,0 +1,401 @@
+{% extends "base.html" %}
+{% set hide_wa = true %}
+{% block meta %}
+<meta name="description" content="{{ item_description }}{% if aliases %} Also called {{ aliases[:3] | join(', ') }}.{% endif %} ₹{{ item.price }}, Order online, no platform fees.">
+<title>{{ item.name }}{% if aliases %} ({{ aliases[0] }}){% endif %} Price ₹{{ item.price }} · Order Online | {{ biz.name }}</title>
+<meta property="og:type" content="product">
+<meta property="og:title" content="{{ item.name }} | {{ biz.name }}">
+<meta property="og:description" content="{{ item_description }}">
+<meta property="og:url" content="{{ item_url }}">
+<meta property="og:image" content="{{ share_image }}">
+<meta property="og:locale" content="en_IN">
+<meta property="og:site_name" content="{{ biz.name }}">
+<meta property="product:price:amount" content="{{ item.price }}">
+<meta property="product:price:currency" content="INR">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ item.name }} | {{ biz.name }}">
+<meta name="twitter:description" content="{{ item_description }}">
+<meta name="twitter:image" content="{{ share_image }}">
+{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ item_url }}">{% endblock %}
+{% block fonts %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+{% endblock %}
+{% block styles %}{% endblock %}
+{% block body %}
+<div id="item-app">
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+    <a href="/">Home</a> <span class="bc-sep">›</span>
+    <a href="/menu">Menu</a> <span class="bc-sep">›</span>
+    <a href="/category/{{ category_slug }}">{{ item.group }}</a> <span class="bc-sep">›</span>
+    <span class="bc-cur">{{ item.name }}</span>
+  </nav>
+
+  <main>
+    {% if not has_photo %}
+    <div class="hero-card" aria-hidden="true">
+      <span class="hero-veg"><i></i></span>
+      <div class="hero-cat">{{ item.group | upper }}</div>
+      <div class="hero-name">{{ item.name }}</div>
+    </div>
+    {% endif %}
+    {% if has_photo %}
+    <div class="photo">
+      <img src="{{ photo_url }}" alt="{{ item.name }}, pure vegetarian, {{ biz.name }}" width="400" height="300">
+    </div>
+    {% endif %}
+
+    <div class="title-row">
+      <h1>{{ item.name }}</h1>
+      {% if item.popular %}<span class="pop">popular</span>{% endif %}
+    </div>
+    {% if aliases %}<p class="aka">Also known as {{ aliases | join(' · ') }}</p>{% endif %}
+    <div class="cat"><span class="veg-mark" aria-hidden="true"></span>{{ item.group }} · {{ "Half portion available" if half else "Full portion" }} · pure veg</div>
+
+    <div class="status">
+      {% if available %}
+      <span class="av">● Available now</span>
+      {% else %}
+      <span class="sold">○ {{ status_text }}</span>
+      {% endif %}
+    </div>
+
+    <div class="price">
+      ₹{{ item.price }}
+      {% if half %}<span class="half-inline">· ₹{{ half }} (half)</span>{% endif %}
+    </div>
+    {% set sw = external_rating(item.id) %}
+    {% if sw or dish_rating.count %}
+    <div class="ratings-line">
+      {% if dish_rating.count %}<a href="#reviews"><span class="rv-stars">★</span> {{ dish_rating.average }} · {{ dish_rating.count }} rating{{ "" if dish_rating.count == 1 else "s" }} here</a>{% endif %}
+      {% if sw %}<span><span class="rv-stars">★</span> {{ sw.rating }} · {{ sw.count_text }} ratings</span>{% endif %}
+    </div>
+    {% endif %}
+
+    <div class="order-box" id="order-box"
+         data-id="{{ item.id }}" data-name="{{ item.name }}"
+         data-price="{{ item.price }}" data-available="{{ '1' if available else '0' }}">
+      <div class="stepper" aria-label="Quantity">
+        <button type="button" class="step" id="qty-minus" aria-label="Decrease quantity">−</button>
+        <span class="qty" id="qty-val">1</span>
+        <button type="button" class="step" id="qty-plus" aria-label="Increase quantity">+</button>
+      </div>
+      <button class="cta add" id="add-btn">Add to cart</button>
+      <div class="add-state" id="add-state"></div>
+      <a class="alt" href="/menu#checkout">See the full menu &amp; checkout →</a>
+    </div>
+  </main>
+
+  <section class="about">
+    <h2>About {{ item.name }}</h2>
+    <p>{{ item_description }}</p>
+    <p class="facts">Made fresh to order at {{ biz.name }}.</p>
+  </section>
+
+  <section class="near">
+    <h2>{{ item.name }} near you</h2>
+    <p>Looking for {{ item.name | lower }}{% if aliases %} ({{ aliases[:2] | join(' / ') | lower }}){% endif %} near you? Our kitchen is at {{ biz.street_address }} and delivers it hot to {{ nearby_areas[:-1] | join(', ') }} and {{ nearby_areas[-1] }}.</p>
+  </section>
+
+  <section class="thali" id="thali" hidden>
+    <h2>What's in this {{ 'thali' if 'thali' in (item.group | lower) else 'dish' }}?</h2>
+    <ul class="thali-pills" id="thali-pills" aria-label="Everything included"></ul>
+    <p class="facts">Every plate is assembled fresh when you order. Want a swap or an extra? Add a note at checkout. If it changes the price, the kitchen messages you on WhatsApp before cooking.</p>
+  </section>
+
+  <section class="ordering">
+    <h2>Order {{ item.name }} today</h2>
+    {% set pr = promo() %}
+    {% if pr %}<a class="promo-chip" href="/menu?code={{ pr.code }}"><b>{{ pr.code }}</b> <span>{{ pr.headline }}{% if pr.detail %}, {{ pr.detail }}{% endif %}. Tap to save it for checkout.</span></a>{% endif %}
+    <ul>
+      <li><b>Online:</b> add it to your cart above and check out on this site. <a href="/how-to-order">How ordering works</a>.</li>
+      <li><b>WhatsApp:</b> send "hi" to {{ ordering.whatsapp }} to order, or for a large or catering order.</li>
+      <li><b>By phone:</b> {{ ordering.phone }}.</li>
+      <li><b>Pickup:</b> {{ ordering.address }}. <a href="/delivery">Delivery areas</a>.</li>
+      <li><b>Delivery:</b> {{ ordering.zones }}.</li>
+      <li><b>Hours:</b> {{ ordering.hours }}.</li>
+    </ul>
+    <div class="quick-links">
+      <a href="/category/{{ category_slug }}">More {{ item.group | lower }}</a>
+      <a href="/menu">Full menu</a>
+      <a href="/delivery">Delivery</a>
+      <a href="/track">Track an order</a>
+    </div>
+  </section>
+
+  {% if dish_rating.count %}
+  <section class="dish-reviews" id="reviews">
+    <h2>{{ item.name }}: what customers say</h2>
+    <p class="rv-sum"><span class="rv-stars" aria-hidden="true">{{ "★" * (dish_rating.average|round|int) }}{{ "☆" * (5 - (dish_rating.average|round|int)) }}</span>
+      <b>{{ dish_rating.average }}</b> out of 5 · {{ dish_rating.count }} rating{{ "" if dish_rating.count == 1 else "s" }} from delivered orders</p>
+    {% for r in dish_reviews %}
+    <blockquote class="rv">
+      <div class="rv-stars" aria-label="{{ r.rating }} out of 5">{{ "★" * r.rating }}{{ "☆" * (5 - r.rating) }}</div>
+      <p>{{ r.comment }}</p>
+      <cite>{{ r.author_name or "Verified customer" }} · {{ r.created_at[:10] }}</cite>
+    </blockquote>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <section class="dish-faq">
+    <h2>{{ item.name }}: questions people ask</h2>
+    {% for f in dish_faqs %}
+    <details{% if loop.first %} open{% endif %}>
+      <summary>{{ f.q }}</summary>
+      <p>{{ f.a }}</p>
+    </details>
+    {% endfor %}
+  </section>
+
+  {% if related %}
+  <section class="related">
+    <h2>More {{ item.group|lower }} from the menu</h2>
+    <p class="related-note">These go well together, or are cooked the same way.</p>
+    {% for r in related %}
+    <div class="rel-card">
+      <a class="rel-main" href="/menu/{{ r.id.split('__')[0] }}">
+        {% if r.photo_id in dish_photos %}
+        <div class="rel-photo"><img src="/static/img/dishes/{{ r.photo_id }}.jpg" alt="{{ r.name }}" loading="lazy" width="48" height="48"></div>
+        {% endif %}
+        <div class="rel-body">
+          <div class="rel-name"><span class="veg-mark" aria-hidden="true"></span>{{ r.name }}</div>
+          <div class="rel-sub">₹{{ r.price }}{% if r.popular %} · popular{% endif %}</div>
+        </div>
+      </a>
+      <div class="rel-stepper" data-id="{{ r.id.split('__')[0] }}" data-price="{{ r.price }}" data-name="{{ r.name }}"></div>
+    </div>
+    {% endfor %}
+    <a class="rel-all" href="/menu">View the full {{ biz.name }} menu →</a>
+  </section>
+  {% endif %}
+
+  </div>
+
+<style>
+:root {
+  --g: #0E7A45; --g2: #6FBF3F; --sf: #E08A1E;
+  --bg: #FBF8F2; --card: #fff; --border: #E7E1D6; --ink: #171A14;
+  --sub: #6F7468; --line2: #EFEBE3;
+}
+* { box-sizing: border-box; margin: 0; }
+body { font-family: 'IBM Plex Sans', system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+
+#item-app { max-width: 480px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; }
+
+.breadcrumb { font: 500 12px 'IBM Plex Mono', monospace; color: var(--sub); padding: 12px 18px 0; }
+.breadcrumb a { color: var(--g); text-decoration: none; }
+.breadcrumb a:hover { text-decoration: underline; }
+.bc-sep { margin: 0 5px; color: #B9B2A2; }
+.bc-cur { color: var(--sub); }
+
+main { flex: 1; padding: 14px 18px 4px; }
+
+.photo { width: 100%; aspect-ratio: 4/3; border-radius: 16px; overflow: hidden; border: 1px solid var(--border); background: #fff; margin-bottom: 16px; }
+.photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+h1 { font-family: 'Bricolage Grotesque', sans-serif; font-size: 26px; line-height: 1.15; }
+.pop { background: #EDF6E2; color: #3F5B1F; font-size: 11px; padding: 3px 9px; border-radius: 999px; font-weight: 600; }
+
+.cat { font-size: 12px; color: var(--sub); margin-top: 8px; display: flex; align-items: center; gap: 6px; }
+
+.veg-mark { flex: none; display: inline-block; width: 12px; height: 12px; border: 1.5px solid var(--g); border-radius: 2px; position: relative; }
+.veg-mark::after { content: ''; position: absolute; width: 6px; height: 6px; background: var(--g); border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+
+.status { margin-top: 14px; }
+.av { font: 600 12px/1 'IBM Plex Mono', monospace; color: var(--g); }
+.sold { font: 600 12px/1 'IBM Plex Mono', monospace; color: #B3261E; }
+
+.price { font-family: 'Bricolage Grotesque', sans-serif; font-size: 32px; font-weight: 700; margin-top: 14px; }
+.half-inline { font-family: 'IBM Plex Sans', sans-serif; font-size: 14px; font-weight: 500; color: var(--sub); }
+
+.cta { display: flex; align-items: center; justify-content: center; text-decoration: none; font-size: 15px; font-weight: 600; border-radius: 12px; padding: 14px; margin-top: 14px; }
+.cta.add { background: var(--g); color: #fff; border: none; width: 100%; cursor: pointer; }
+.cta.add.done { background: #25D366; }
+.cta.add:disabled { background: #B9B2A2; cursor: not-allowed; }
+
+.order-box { margin-top: 18px; }
+.stepper { display: flex; align-items: center; justify-content: center; gap: 18px; background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 8px 12px; }
+.step { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--border); background: #fff; color: var(--g); font-size: 22px; line-height: 1; cursor: pointer; }
+.step:hover { border-color: var(--g); }
+.qty { font-family: 'Bricolage Grotesque', sans-serif; font-size: 20px; font-weight: 700; min-width: 28px; text-align: center; }
+.add-state { font-size: 13px; color: var(--g); margin-top: 10px; text-align: center; min-height: 18px; }
+.add-state a { color: var(--g); font-weight: 600; }
+.alt { display: block; text-align: center; font-size: 13px; color: var(--sub); margin-top: 8px; text-decoration: none; }
+.alt:hover { color: var(--g); text-decoration: underline; }
+
+section { padding: 22px 18px 0; }
+section h2 { font-family: 'Bricolage Grotesque', sans-serif; font-size: 20px; margin-bottom: 8px; line-height: 1.2; }
+
+.aka { font-size: 13px; color: var(--sub); margin-top: 6px; line-height: 1.45; }
+.near p { font-size: 14px; line-height: 1.65; color: #3C4137; }
+.dish-faq details { border-bottom: 1px dashed var(--line2); padding: 10px 0; }
+.dish-faq summary { font-size: 14px; font-weight: 600; cursor: pointer; line-height: 1.4; }
+.dish-faq details p { font-size: 14px; line-height: 1.6; color: #3C4137; margin-top: 6px; }
+
+.about p { font-size: 14px; line-height: 1.65; color: #3C4137; }
+.about .facts { font-size: 13px; color: var(--sub); margin-top: 8px; }
+
+.thali-pills { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding: 0; }
+.thali-pills li { font: 500 13px/1.2 'IBM Plex Mono', monospace; color: #2C5A1E; background: #EDF6E2; border: 1px solid #DDE4CC; border-radius: 999px; padding: 8px 13px; }
+.thali .facts { font-size: 13px; color: var(--sub); margin-top: 12px; }
+
+.promo-chip { display: block; text-decoration: none; background: #EDF6E2; border: 1px dashed var(--g); border-radius: 12px; padding: 12px 14px; margin: 4px 0 12px; font-size: 14px; line-height: 1.4; color: #2C5A1E; }
+.promo-chip b { font-family: 'IBM Plex Mono', monospace; background: #fff; border-radius: 6px; padding: 2px 7px; margin-right: 4px; }
+.quick-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.quick-links a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border: 1px solid var(--border); border-radius: 999px; background: #fff; color: var(--g); font-weight: 600; font-size: 14px; text-decoration: none; }
+.ordering ul { list-style: none; padding: 0; }
+.ordering li { font-size: 14px; line-height: 1.55; color: #3C4137; padding: 6px 0 6px 18px; position: relative; border-bottom: 1px dashed var(--line2); }
+.ordering li::before { content: ''; position: absolute; left: 0; top: 12px; width: 7px; height: 7px; border-radius: 50%; background: var(--g2); }
+.ordering li:last-child { border-bottom: none; }
+.ordering li b { color: var(--ink); }
+
+.ratings-line { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--sub); margin-top: 6px; }
+.ratings-line a { color: var(--sub); }
+.rv-sum { font-size: 14px; color: #3C4137; margin-bottom: 8px; }
+.rv-stars { color: #E08A1E; letter-spacing: 1px; }
+.rv { border-bottom: 1px dashed var(--line2); padding: 10px 0; margin: 0; }
+.rv p { font-size: 14px; line-height: 1.6; color: #3C4137; margin: 4px 0; }
+.rv cite { font-size: 12px; color: var(--sub); font-style: normal; }
+.related { padding-bottom: 8px; }
+.related-note { font-size: 13px; color: var(--sub); margin-bottom: 12px; }
+.rel-card { display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 10px 14px; margin-bottom: 10px; }
+.rel-main { display: flex; align-items: center; gap: 12px; flex: 1; text-decoration: none; color: var(--ink); min-width: 0; }
+.rel-photo { width: 48px; height: 48px; flex: 0 0 auto; border-radius: 10px; overflow: hidden; }
+.rel-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rel-body { flex: 1; }
+.rel-name { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.rel-name .veg-mark { width: 10px; height: 10px; }
+.rel-name .veg-mark::after { width: 5px; height: 5px; }
+.rel-sub { font-size: 12px; color: var(--sub); margin-top: 2px; }
+.rel-stepper { flex: none; display: flex; align-items: center; gap: 6px; }
+.rs-btn { width: 30px; height: 30px; border-radius: 9px; border: 1px solid var(--g); background: #fff; color: var(--g); font-size: 17px; font-weight: 700; line-height: 1; cursor: pointer; }
+.rs-btn:hover { background: #EDF6E2; }
+.rs-btn.minus { color: #B3261E; border-color: #E2CCC0; }
+.rs-btn.minus:hover { background: #FBEAE5; }
+.rs-qty { font-family: 'Bricolage Grotesque', sans-serif; font-size: 16px; font-weight: 700; min-width: 20px; text-align: center; }
+.rel-all { display: inline-block; font: 600 13px 'IBM Plex Mono', monospace; color: var(--g); text-decoration: none; margin-top: 4px; }
+.rel-all:hover { text-decoration: underline; }
+
+
+/* Launch redesign: hero card when there is no photo, sticky add bar */
+.hero-card { position: relative; background: var(--g); border-radius: 22px; min-height: 190px; padding: 0 20px 20px; display: flex; flex-direction: column; justify-content: flex-end; margin-bottom: 16px; }
+.hero-cat { font: 600 11px/1 'IBM Plex Mono', monospace; color: #CFE6D8; letter-spacing: .06em; }
+.hero-name { margin-top: 6px; font-family: 'Bricolage Grotesque', sans-serif; font-size: 34px; line-height: 1; color: #FBF8F2; font-weight: 700; }
+.hero-veg { position: absolute; right: 18px; top: 18px; width: 22px; height: 22px; border: 2px solid #fff; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
+.hero-veg i { width: 9px; height: 9px; border-radius: 50%; background: #fff; }
+.hero-card + .title-row { display: none; }
+.hero-card ~ .aka { margin-top: 0; }
+#item-app { padding-bottom: 120px; }
+.cartbar, .site-wa { display: none !important; }  /* the sticky add bar replaces both */
+.order-box { position: fixed; left: 0; right: 0; bottom: 0; margin: 0; z-index: 20; background: #fff; border-top: 1px solid var(--border); padding: 12px 18px calc(16px + env(safe-area-inset-bottom)); display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; max-width: 720px; margin-left: auto; margin-right: auto; }
+.order-box .stepper { padding: 4px 6px; gap: 8px; }
+.order-box .cta.add { margin-top: 0; min-height: 54px; border-radius: 14px; font-size: 16px; }
+.order-box .add-state, .order-box .alt { grid-column: 1 / -1; margin: 0; min-height: 0; }
+.order-box .add-state:empty { display: none; }
+.step { min-width: 44px; min-height: 44px; }
+.price { font-size: 26px; }
+
+@media (min-width: 600px) {
+  #item-app { max-width: 720px; }
+  main { max-width: 640px; margin: 0 auto; }
+  section { max-width: 640px; margin: 0 auto; }
+}
+</style>
+
+<script type="application/ld+json">{{ item_schema | tojson }}</script>
+<script type="application/ld+json">{{ breadcrumb_schema | tojson }}</script>
+<script type="application/ld+json">{{ faq_schema | tojson }}</script>
+<script>
+(function () {
+  const CART_KEY = "cp_menu_cart";
+  const box = document.getElementById("order-box");
+  if (!box) return;
+  const id = box.dataset.id;
+  const price = Number(box.dataset.price);
+  const available = box.dataset.available === "1";
+  const qtyEl = document.getElementById("qty-val");
+  const minus = document.getElementById("qty-minus");
+  const plus = document.getElementById("qty-plus");
+  const addBtn = document.getElementById("add-btn");
+  const stateEl = document.getElementById("add-state");
+
+  let cart = {};
+  try { cart = JSON.parse(localStorage.getItem(CART_KEY) || "{}"); } catch (_) { cart = {}; }
+  let qty = Math.min(Math.max(cart[id] > 0 ? cart[id] : 1, 1), 20);
+  qtyEl.textContent = qty;
+
+  if (!available) {
+    addBtn.disabled = true;
+    addBtn.textContent = "Not available today";
+    return;
+  }
+  if (cart[id] > 0) {
+    stateEl.innerHTML = 'In your cart' + (cart[id] > 1 ? '(<b>' + cart[id] + '</b>)' : '') + '. <a href="/menu#checkout">Go to checkout →</a>';
+  }
+
+  const save = () => { try { localStorage.setItem(CART_KEY, JSON.stringify(cart)); } catch (_) {} };
+
+  const steppers = Array.from(document.querySelectorAll(".rel-stepper"));
+  const renderSteppers = () => {
+    steppers.forEach((el) => {
+      const id = el.dataset.id;
+      const qty = cart[id] || 0;
+      el.innerHTML = qty > 0
+        ? `<button type="button" class="rs-btn minus" aria-label="Decrease quantity">−</button>
+           <span class="rs-qty">${qty}</span>
+           <button type="button" class="rs-btn" aria-label="Increase quantity">+</button>`
+        : `<button type="button" class="rs-btn" aria-label="Add ${el.dataset.name} to cart">+</button>`;
+    });
+  };
+  steppers.forEach((el) => {
+    const id = el.dataset.id;
+    el.addEventListener("click", (e) => {
+      const t = e.target;
+      if (!t.classList.contains("rs-btn")) return;
+      const cur = cart[id] || 0;
+      if (t.classList.contains("minus")) {
+        if (cur <= 1) delete cart[id]; else cart[id] = cur - 1;
+      } else {
+        cart[id] = Math.min((cur || 0) + 1, 20);
+      }
+      save();
+      renderSteppers();
+    });
+  });
+  renderSteppers();
+
+  minus.addEventListener("click", () => { if (qty > 1) { qty--; qtyEl.textContent = qty; } });
+  plus.addEventListener("click", () => { if (qty < 20) { qty++; qtyEl.textContent = qty; } });
+  addBtn.addEventListener("click", () => {
+    cart[id] = qty;
+    save();
+    qtyEl.textContent = qty;
+    addBtn.classList.add("done");
+    addBtn.textContent = "✓ Added to cart";
+    stateEl.style.color = "#16a34a";
+    stateEl.innerHTML = 'Added. <a href="/menu#checkout">Go to checkout →</a>';
+    setTimeout(() => { addBtn.classList.remove("done"); addBtn.textContent = "Add more"; }, 1800);
+  });
+})();
+
+(function () {
+  var desc = {{ item_description | tojson }};
+  var m = String(desc || '').match(/[\[{]([^\]}]+)[\]}]/);
+  if (!m) return;
+  var parts = m[1].split('+').map(function (s) { return s.trim(); }).map(function (s) { return s.replace(/^(\d+)\s*/, '$1x '); }).filter(Boolean);
+  if (!parts.length) return;
+  var sec = document.getElementById('thali');
+  var ul = document.getElementById('thali-pills');
+  parts.forEach(function (p) {
+    var li = document.createElement('li');
+    li.textContent = p;
+    ul.appendChild(li);
+  });
+  sec.hidden = false;
+})();
+</script>
+{% endblock %}

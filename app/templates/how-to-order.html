@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block meta %}
+<meta name="description" content="How to order from {{ biz.name }}, on the website or on WhatsApp.">
+<title>How to order · {{ biz.name }}</title>
+{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ site_url }}/how-to-order">{% endblock %}
+{% block body %}
+<main class="page" style="max-width:900px;margin:0 auto;padding:40px 18px;">
+  <h1>How to order from {{ biz.name }}</h1>
+  <ol>
+    <li>Open the <a href="/menu">menu</a> and add dishes to your cart.</li>
+    <li>Choose delivery or pickup ({{ pickup }}).</li>
+    <li>Pay by UPI or cash. We confirm on WhatsApp and you can follow the order on its tracking page.</li>
+  </ol>
+  <p>Open {{ hours_text }}. Questions: {{ store_phone }}.</p>
+  <p>Delivery charges are on the <a href="/delivery">delivery page</a>. Packing fee: ₹{{ packing_fee }}.</p>
+</main>
+{% endblock %}

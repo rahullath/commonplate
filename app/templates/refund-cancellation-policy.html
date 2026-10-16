@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block meta %}
+<meta name="description" content="Refund and cancellation policy for orders placed with {{ biz.name }}.">
+<title>Refund &amp; Cancellation Policy | {{ biz.name }}</title>
+{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ site_url }}/refund-cancellation-policy">{% endblock %}
+{% block body %}
+<main class="page" style="max-width:760px;margin:0 auto;padding:40px 18px;">
+  <h1>Refund &amp; Cancellation Policy</h1>
+  <p>This is a template. Replace it with your own terms.</p>
+  <h2>Cancelling</h2>
+  <p>Orders can be cancelled until the kitchen starts cooking. Contact {{ biz.phone_display }}.</p>
+  <h2>Refunds</h2>
+  <p>A paid order that is cancelled is refunded in full to the original payment method.</p>
+</main>
+{% endblock %}

@@ -1,0 +1,1592 @@
+{% extends "base.html" %}
+{% set hide_wa = true %}
+{% block meta %}
+<meta name="description" content="Full menu, prices and daily availability for {{ biz.name }}. Order online for delivery or pickup.">
+<title>{{ biz.name }} Menu &amp; Prices</title>
+{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ site_url }}/menu">{% endblock %}
+{% block fonts %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+{% endblock %}
+{% block styles %}{% endblock %}
+{% block body %}
+<div id="menu-app">
+  <header class="mh">
+    <div class="mh-top">
+      <a href="/" class="mh-logo" aria-label="{{ biz.name }} home"><img src="/static/logo.png" alt=""></a>
+      <div class="mh-search" id="search-box">
+        <span class="mh-search-icon" aria-hidden="true"></span>
+        <input type="text" id="search-input" placeholder="Search paneer, chaat, पनीर…" autocomplete="off" aria-label="Search the menu">
+      </div>
+    </div>
+    <h1 class="mh-title">Today's menu</h1>
+  </header>
+
+  <nav class="group-nav" id="group-nav">
+    <a href="#" class="chip active" data-group="all">Popular</a>
+    {% for g in groups %}<a href="#g-{{ loop.index }}" class="chip" data-group="{{ loop.index }}">{{ g["group"] }}</a>{% endfor %}
+  </nav>
+
+  <div class="promo-strip" id="promo-strip" hidden>
+    <span>🎟️ <b id="promo-code"></b> saved. It is applied when you check out.</span>
+    <button type="button" id="promo-x" aria-label="Remove the saved code">✕</button>
+  </div>
+  <main id="menu-main">
+    {% for g in groups %}
+    <section class="group" id="g-{{ loop.index }}">
+      <h2>{{ g["group"] }} <a class="cat-link" href="/category/{{ g.get('slug', '') }}">view full category &rarr;</a></h2>
+      {% for it in g["items"] %}
+      <div class="menu-card{% if not it.available %} off{% endif %}" data-id="{{ it.id }}" data-name="{{ (it.name ~ ' ' ~ aliases_for(it.id) | join(' ')) | lower }}" data-popular="{{ 'true' if it.popular else 'false' }}">
+        {% if it.photo_id in dish_photos %}
+        <div class="card-photo">
+          <img src="/static/img/dishes/{{ it.photo_id }}.jpg" alt="{{ it.name }}" loading="lazy">
+        </div>
+        {% endif %}
+        <div class="card-body">
+          <div class="card-title">
+            <span class="veg-mark" aria-hidden="true"></span>
+            <a class="card-name" href="/menu/{{ it.id.split('__')[0] }}">{{ it.name }}</a>
+            {% if it.popular %}<span class="card-pop">popular</span>{% endif %}
+          </div>
+          {% if it.description %}<div class="card-desc">{{ it.description }}</div>{% endif %}
+          {% if it.category == "Thalis" and it.available %}
+          <details class="card-customize">
+            <summary>Customize (swap sabzi, change rotis)</summary>
+            <textarea class="card-note" data-id="{{ it.id }}" maxlength="200"
+              placeholder="e.g. swap dry sabzi for Paneer Butter Masala, +2 phulka. We'll confirm price by phone if it changes."></textarea>
+          </details>
+          {% endif %}
+          <div class="card-bottom">
+            <span class="card-price">₹{{ it.price }}</span>
+            {% if it.available %}
+            <div class="card-stepper" data-id="{{ it.id }}">
+              <button data-act="dec" aria-label="decrease">−</button>
+              <span class="qty" data-role="qty">0</span>
+              <button data-act="inc" aria-label="increase">+</button>
+            </div>
+            {% else %}
+            <span class="card-sold-out">{{ it.unavailable_reason or "Finished for today" }}</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </section>
+    {% endfor %}
+
+    <div id="no-results" class="no-results" hidden></div>
+  </main>
+
+  <div id="cart-bar" class="cart-bar hidden">
+    <div class="min-card" id="min-card" hidden>
+      <div class="min-top"><span id="min-text"></span><span class="m" id="min-m"></span></div>
+      <div class="min-bar"><div id="min-fill"></div></div>
+      <div class="min-chips" id="min-chips"></div>
+      <div class="min-note">Pickup has no minimum.</div>
+    </div>
+    <div class="cart-inner">
+      <div class="cart-info">
+        <div class="cart-count"><span id="cart-count">0</span> items · <span id="cart-subtotal">₹0</span></div>
+        <div class="cart-gap">plus delivery, shown before you pay</div>
+      </div>
+      <a href="#checkout" id="cart-checkout" class="cart-btn">Checkout →</a>
+    </div>
+  </div>
+
+  </div>
+
+<style>
+:root {
+  --g: #0E7A45; --g2: #6FBF3F; --sf: #E08A1E;
+  --bg: #FBF8F2; --card: #fff; --border: #E7E1D6; --ink: #171A14;
+  --sub: #6F7468; --line2: #EFEBE3;
+}
+* { box-sizing: border-box; margin: 0; }
+body { font-family: 'IBM Plex Sans', system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+
+#menu-app { max-width: 480px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; }
+
+/* Header */
+.mh { background: var(--g); color: #fff; padding: 16px 18px 18px; }
+.mh-top { display: flex; align-items: center; gap: 12px; }
+.mh-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 20px; line-height: 1.1; margin: 0; flex: 1; }
+.mh-badge { background: rgba(255,255,255,.16); border-radius: 999px; padding: 7px 12px; font-size: 12px; }
+.mh-search { margin-top: 14px; background: rgba(255,255,255,.14); border-radius: 12px; padding: 11px 14px; display: flex; align-items: center; gap: 8px; }
+.mh-search-icon { font-size: 14px; opacity: .6; }
+.mh-search input { background: none; border: none; outline: none; color: #fff; font-size: 13px; width: 100%; }
+.mh-search input::placeholder { color: rgba(255,255,255,.55); }
+
+/* Group nav */
+.group-nav { display: flex; gap: 8px; overflow-x: auto; padding: 12px 14px; background: var(--bg); border-bottom: 1px solid var(--line2); position: sticky; top: 0; z-index: 5; }
+.group-nav::-webkit-scrollbar { display: none; }
+.chip { background: var(--card); border: 1px solid var(--border); border-radius: 999px; padding: 8px 14px; text-decoration: none; color: var(--ink); white-space: nowrap; font-size: 13px; cursor: pointer; transition: background .15s ease, color .15s ease, border-color .15s ease; }
+.chip.active { background: var(--g); color: #fff; border-color: var(--g); }
+
+/* Menu main */
+main { flex: 1; padding: 14px; padding-bottom: 100px; }
+.group { scroll-margin-top: 64px; }
+.group h2 { font-size: 16px; margin: 20px 0 10px; color: var(--ink); font-weight: 600; display: flex; gap: 10px; }
+.cat-link { font: 500 11px/1 'IBM Plex Mono', monospace; color: var(--g); text-decoration: none; align-self: baseline; letter-spacing: .03em; }
+.cat-link:hover { text-decoration: underline; }
+.group:first-child h2 { margin-top: 0; }
+
+/* Item card */
+.menu-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 12px; display: flex; gap: 12px; margin-bottom: 12px; transition: box-shadow .15s ease, transform .15s ease; }
+.menu-card:hover { box-shadow: 0 4px 16px rgba(23,26,20,.08); transform: translateY(-1px); }
+.menu-card.off { opacity: .55; }
+.card-photo { width: 84px; height: 84px; flex: 0 0 auto; border-radius: 12px; overflow: hidden; }
+.card-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.card-body { flex: 1; display: flex; flex-direction: column; }
+.card-title { display: flex; align-items: center; gap: 7px; }
+.card-name { font-size: 15px; font-weight: 600; text-decoration: none; color: inherit; }
+.card-name:hover { text-decoration: underline; }
+.card-pop { background: #EDF6E2; color: #3F5B1F; font-size: 10px; padding: 2px 7px; border-radius: 999px; }
+
+/* FSSAI vegetarian mark (Labelling & Display Regulations, 2020) — green
+   square with a solid green dot, the mandated symbol for veg dishes. */
+.veg-mark { flex: none; display: inline-block; width: 12px; height: 12px; border: 1.5px solid var(--g); border-radius: 2px; position: relative; }
+.veg-mark::after { content: ''; position: absolute; width: 6px; height: 6px; background: var(--g); border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+.card-desc { font-size: 12px; color: var(--sub); margin-top: 3px; line-height: 1.45; }
+.card-customize { margin-top: 6px; }
+.card-customize summary { font-size: 12px; color: var(--g); cursor: pointer; font-weight: 500; }
+.card-note { width: 100%; margin-top: 6px; padding: 8px; font: 13px/1.4 'IBM Plex Sans', sans-serif; border: 1px solid var(--border); border-radius: 8px; resize: vertical; min-height: 44px; box-sizing: border-box; }
+.card-bottom { margin-top: auto; display: flex; justify-content: space-between; align-items: center; padding-top: 6px; }
+.card-price { font-size: 16px; font-weight: 600; }
+.card-sold-out { font: 500 11px/1 'IBM Plex Mono', monospace; color: #B3261E; }
+.card-stepper { display: flex; align-items: center; gap: 12px; border: 1px solid var(--g); border-radius: 999px; padding: 5px 12px; }
+.card-stepper button { background: none; border: none; color: var(--g); font-size: 16px; cursor: pointer; padding: 0 4px; }
+.card-stepper .qty { font-weight: 600; font-size: 14px; min-width: 16px; text-align: center; }
+
+.no-results { text-align: center; padding: 40px 20px; color: var(--sub); }
+
+/* Cart bar */
+.cart-bar { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; background: #fff; border-top: 1px solid var(--border); padding: 14px; z-index: 20; }
+.cart-inner { background: var(--g); color: #fff; border-radius: 14px; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; }
+.cart-count { font-size: 15px; font-weight: 600; }
+.cart-gap { font-size: 11px; opacity: .85; margin-top: 2px; }
+.cart-btn { color: #fff; text-decoration: none; font-size: 15px; font-weight: 600; white-space: nowrap; }
+.cart-wa { text-align: center; font-size: 12px; color: var(--sub); margin-top: 10px; }
+.cart-wa a { color: var(--g); text-decoration: underline; }
+
+/* Checkout overlay */
+.checkout-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 30; display: flex; align-items: flex-end; justify-content: center; }
+.checkout-panel { background: var(--bg); border-radius: 20px 20px 0 0; width: 100%; max-width: 480px; max-height: 85vh; overflow-y: auto; padding: 24px 18px 40px; }
+.checkout-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 20px; margin-bottom: 16px; }
+.checkout-field { margin-bottom: 14px; }
+.checkout-step { font: 600 12px/1 'IBM Plex Mono', monospace; letter-spacing: .04em; text-transform: uppercase; color: var(--g, #0E7A45); margin: 18px 0 10px; }
+.checkout-hint { font-size: 12px; color: #6F7468; margin-top: 4px; line-height: 1.45; }
+.checkout-field label { display: block; font-size: 13px; color: var(--sub); margin-bottom: 4px; }
+.checkout-field input, .checkout-field select, .checkout-field textarea { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 15px; background: #fff; }
+.schedule-date-select { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; background: #fff; margin-bottom: 8px; }
+.time-pills { display: flex; gap: 7px; }
+.time-pill[hidden] { display: none; }
+.time-pill { flex: 1; text-align: center; background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 10px 6px; font-size: 13px; cursor: pointer; color: var(--ink); }
+.time-pill.active { background: var(--g); color: #fff; border-color: var(--g); font-weight: 600; }
+.saved-addr-list { display: flex; flex-direction: column; gap: 8px; }
+.saved-addr-card { text-align: left; background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.5; cursor: pointer; color: var(--ink); }
+.saved-addr-card.selected { border-color: var(--g); border-width: 2px; }
+.saved-addr-label { font-weight: 600; }
+.saved-addr-text { color: var(--sub); margin-top: 2px; }
+.edit-window { margin-top: 16px; background: #FBF0DE; border: 1px solid #EFDFC2; border-radius: 12px; padding: 13px 14px; text-align: left; }
+.edit-window-text { font-size: 13px; font-weight: 600; color: #8A5A12; }
+.edit-window-btn { margin-top: 10px; background: #fff; border: 1px solid #EFDFC2; border-radius: 9px; padding: 9px 12px; font-size: 13px; font-weight: 600; color: #8A5A12; cursor: pointer; }
+.edit-window-btn.link { background: none; border: none; padding: 0; text-decoration: underline; }
+.edit-window-form textarea, .edit-window-form input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; margin-top: 8px; background: #fff; }
+.map-pin { height: 180px; border-radius: 10px; overflow: hidden; margin-top: 8px; border: 1px solid var(--border); background: #E9E4D8; }
+.map-address-preview { font-size: 12px; color: #4A4F45; margin-top: 6px; line-height: 1.4; min-height: 1.4em; }
+.checkout-field textarea { resize: vertical; }
+.co-code { margin-top: 6px; font-size: 14px; }
+.co-code summary { cursor: pointer; color: var(--sub, #6F7468); list-style: none; padding: 6px 0; }
+.co-code summary::-webkit-details-marker { display: none; }
+.co-code[open] summary { color: var(--ink, #171A14); }
+.co-code-row { display: flex; gap: 8px; margin-top: 6px; }
+.co-code-row input { flex: 1; min-width: 0; padding: 10px; border: 1px solid var(--border, #E7E1D6); border-radius: 8px; font-size: 15px; text-transform: uppercase; background: #fff; }
+.co-code-row button { padding: 0 16px; border: 1px solid var(--g, #0E7A45); color: var(--g, #0E7A45); background: #fff; border-radius: 8px; font-weight: 600; cursor: pointer; }
+.checkout-summary { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 16px; font-size: 14px; }
+.checkout-row { display: flex; justify-content: space-between; padding: 4px 0; }
+.checkout-row.total { font-weight: 700; border-top: 1px solid var(--border); margin-top: 6px; padding-top: 8px; font-size: 16px; }
+.checkout-row-note { font-size: 11px; color: var(--sub); text-align: right; margin-top: 2px; }
+.checkout-item-row { align-items: center; gap: 8px; }
+.checkout-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.checkout-item-qty { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; flex: none; }
+.qty-btn { border: none; background: none; color: var(--g); font-size: 15px; line-height: 1; padding: 4px 2px; cursor: pointer; font-weight: 700; }
+.qty-val { font-weight: 600; font-size: 13px; min-width: 12px; text-align: center; }
+.checkout-item-price { flex: none; width: 52px; text-align: right; }
+.checkout-nudge { background: #FBF0DE; border: 1px solid #EFDFC2; border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; }
+.checkout-nudge-title { font-size: 13px; font-weight: 600; color: #8A5A12; }
+.checkout-nudge-sub { font-size: 12px; color: #8A5A12; opacity: .85; margin-top: 3px; line-height: 1.5; }
+.checkout-nudge-chips { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.nudge-chip { background: #fff; border: 1px solid #EFDFC2; border-radius: 10px; padding: 8px 12px; font-size: 13px; font-weight: 600; color: #8A5A12; cursor: pointer; }
+.checkout-place { width: 100%; background: var(--g); color: #fff; border: none; border-radius: 12px; padding: 14px; font-size: 16px; font-weight: 600; cursor: pointer; }
+.checkout-place:disabled { opacity: .6; cursor: not-allowed; }
+.checkout-msg { font-size: 13px; margin-top: 8px; text-align: center; }
+.checkout-close { position: absolute; top: 12px; right: 16px; background: none; border: none; font-size: 20px; cursor: pointer; color: var(--sub); }
+.checkout-success { text-align: center; padding: 20px 4px 4px; }
+.checkout-success-icon { width: 56px; height: 56px; margin: 0 auto 16px; border-radius: 50%; background: var(--g); color: #fff; font-size: 26px; display: flex; align-items: center; justify-content: center; }
+.checkout-success .checkout-title { margin-bottom: 8px; }
+.checkout-success-detail { font-size: 14px; line-height: 1.6; color: var(--sub); margin-bottom: 20px; }
+
+
+/* ---- Launch redesign (390px-first) ---- */
+.mh { background: #fff; color: var(--ink); padding: 12px 16px 0; border-bottom: 1px solid var(--border); }
+.mh-top { gap: 10px; }
+.cart-bar.hidden { display: none; }
+.mh-logo { display: none; }
+.site-wa { display: none !important; }  /* cart bar already offers WhatsApp */
+.co-total[hidden] { display: none; }
+.card-stepper.zero { background: #fff; border-color: var(--g); box-shadow: none; }
+.card-stepper.zero button { color: var(--g); }
+.card-stepper.zero .qty { color: var(--g); }
+.card-stepper.zero button[data-act="dec"], .card-stepper.zero .qty { display: none; }
+.card-stepper.zero { padding: 0 6px; }
+.mh-title { font-size: 1px; height: 1px; width: 1px; overflow: hidden; position: absolute; clip: rect(0 0 0 0); }
+.mh-search { margin: 0; flex: 1; background: #F3EFE7; border-radius: 12px; height: 44px; padding: 0 13px; }
+.mh-search-icon { width: 13px; height: 13px; border: 2px solid var(--sub); border-radius: 50%; opacity: 1; flex: 0 0 auto; }
+.mh-search input { color: var(--ink); font-size: 14.5px; }
+.mh-search input::placeholder { color: var(--sub); }
+.group-nav { padding: 12px 16px; background: #fff; }
+.chip { min-height: 36px; display: inline-flex; align-items: center; font-weight: 500; border-color: #DED7C8; }
+.chip.active { background: var(--ink); border-color: var(--ink); font-weight: 600; }
+main { padding: 8px 16px 130px; }
+.group h2 { font-family: 'Bricolage Grotesque', sans-serif; font-size: 20px; font-weight: 700; margin: 24px 0 4px; }
+.menu-card { background: none; border: none; border-bottom: 1px solid var(--line2); border-radius: 0; padding: 16px 0; margin: 0; align-items: flex-start; }
+.menu-card:hover { box-shadow: none; transform: none; }
+.card-photo { width: 112px; height: 112px; border-radius: 14px; order: 2; }
+.card-body { order: 1; min-width: 0; }
+.card-name { font-size: 16px; }
+.card-desc { font-size: 13px; line-height: 1.45; }
+.card-price { font-size: 15px; font-weight: 500; }
+.card-pop { background: none; color: #B06A00; font: 600 10.5px/1 'IBM Plex Mono', monospace; letter-spacing: .04em; padding: 0; }
+.card-stepper { gap: 6px; background: var(--g); color: #fff; border-color: var(--g); border-radius: 10px; padding: 0 4px; min-height: 40px; box-shadow: 0 4px 12px rgba(14,122,69,.25); }
+.card-stepper button { color: #fff; font-size: 20px; min-width: 36px; min-height: 40px; }
+.card-stepper .qty { color: #fff; }
+.cart-bar { background: linear-gradient(rgba(251,248,242,0), var(--bg) 30%); border-top: none; padding: 10px 14px 18px; }
+.cart-inner { border-radius: 16px; min-height: 58px; padding: 0 18px; box-shadow: 0 10px 24px -8px rgba(14,122,69,.55); }
+.cart-btn { font-size: 15.5px; padding: 18px 0 18px 12px; }
+.cart-gap { font-size: 11.5px; }
+
+/* Checkout: 3-step sheet */
+.checkout-overlay { background: rgba(23,26,20,.55); }
+.checkout-panel { max-height: calc(100dvh - 44px); height: calc(100dvh - 44px); border-radius: 24px 24px 0 0; padding: 0; display: flex; flex-direction: column; overflow: hidden; }
+.co-grab { width: 40px; height: 4px; border-radius: 2px; background: #D6CFC1; margin: 10px auto 0; flex: none; }
+.co-top { display: flex; justify-content: space-between; align-items: center; padding: 10px 18px 0; flex: none; }
+.co-back { background: none; border: none; font: 600 12px/1 'IBM Plex Mono', monospace; letter-spacing: .04em; color: var(--sub); cursor: pointer; padding: 12px 8px 12px 0; min-height: 44px; visibility: hidden; }
+.co-top .checkout-close { position: static; width: 44px; height: 44px; border-radius: 50%; background: none; font-size: 20px; }
+.co-progress { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; padding: 0 18px; flex: none; }
+.co-progress span { height: 4px; border-radius: 2px; background: #DED7C8; }
+.co-progress span.on { background: var(--g); }
+#checkout-form { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.co-body { flex: 1; overflow-y: auto; padding: 18px 18px 24px; }
+.co-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 26px; line-height: 1.1; font-weight: 700; margin: 0 0 16px; }
+.co-step[hidden] { display: none; }
+.co-label { font: 600 11.5px/1 'IBM Plex Mono', monospace; letter-spacing: .05em; text-transform: uppercase; color: #5C6157; margin: 18px 0 10px; }
+.co-footer { flex: none; background: #fff; border-top: 1px solid var(--line2); padding: 12px 18px calc(18px + env(safe-area-inset-bottom)); }
+.co-foot-note { display: flex; justify-content: space-between; font-size: 13.5px; padding-bottom: 10px; }
+.co-foot-note:empty { display: none; }
+.co-total { display: flex; justify-content: space-between; align-items: baseline; padding: 0 2px 10px; }
+.co-total span:first-child { font-size: 15px; font-weight: 600; }
+.co-total span:last-child { font-family: 'Bricolage Grotesque', sans-serif; font-size: 22px; font-weight: 700; }
+.checkout-place { min-height: 54px; border-radius: 14px; font-size: 16px; }
+.checkout-field input, .checkout-field select, .checkout-field textarea { min-height: 48px; border-radius: 12px; border-color: #CFC8B9; font-size: 15px; padding: 0 14px; }
+.checkout-field textarea { padding: 12px 14px; }
+.checkout-field label { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.time-pills { background: #EFEAE0; border-radius: 14px; padding: 4px; gap: 4px; }
+.time-pill { min-height: 44px; border: none; background: transparent; border-radius: 11px; font-size: 15px; color: var(--sub); }
+.time-pill.active { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+#time-pills { flex-direction: column; background: none; padding: 0; gap: 10px; }
+#time-pills .time-pill { text-align: left; padding: 14px 16px; border: 1px solid #E3DDD0; background: #fff; border-radius: 14px; color: var(--ink); font-weight: 600; }
+#time-pills .time-pill.active { border: 2px solid var(--g); padding: 13px 15px; box-shadow: none; }
+.map-pin { height: 190px; border-radius: 16px; }
+.saved-addr-list { flex-direction: row; overflow-x: auto; gap: 8px; }
+.saved-addr-card { flex: 0 0 auto; white-space: nowrap; min-height: 44px; border-radius: 999px; padding: 0 14px; }
+.saved-addr-card .saved-addr-text { display: none; }
+.saved-addr-card.selected { background: var(--ink); color: #fff; border-color: var(--ink); }
+.checkout-summary { border-radius: 16px; padding: 6px 14px 12px; }
+.checkout-item-qty { border-radius: 9px; padding: 0; }
+.qty-btn { min-width: 36px; min-height: 36px; font-size: 18px; }
+.co-success { padding: 56px 24px 24px; display: flex; flex-direction: column; align-items: center; text-align: center; overflow-y: auto; flex: 1; }
+.co-success .checkout-success-icon { width: 76px; height: 76px; font-size: 36px; box-shadow: 0 0 0 10px #E7F1EA; margin-bottom: 26px; }
+.co-success .co-kicker { font: 600 12px/1 'IBM Plex Mono', monospace; color: var(--g); letter-spacing: .06em; }
+.co-success .co-title { font-size: 32px; margin: 10px 0 0; }
+.co-links { display: flex; justify-content: center; gap: 28px; margin-top: 16px; font-size: 14.5px; font-weight: 600; }
+.co-links a, .co-links button { color: var(--g); text-decoration: none; background: none; border: none; font: inherit; cursor: pointer; padding: 10px 0; }
+
+
+/* Pass 2: states */
+.state-card { margin-top: 14px; padding: 18px; border-radius: 18px; background: #fff; border: 1px solid #ECE6DA; box-shadow: 0 10px 30px -14px rgba(23,26,20,.3); }
+.state-card[hidden] { display: none; }
+.state-kicker { font: 600 12px/1 'IBM Plex Mono', monospace; letter-spacing: .04em; }
+.state-card h3 { font-family: 'Bricolage Grotesque', sans-serif; font-size: 22px; line-height: 1.15; margin: 10px 0 0; }
+.state-card p { font-size: 14.5px; line-height: 1.5; color: #4A4F45; margin: 8px 0 0; }
+.state-btn { display: flex; align-items: center; justify-content: center; min-height: 52px; border-radius: 14px; font-size: 15px; font-weight: 600; border: 1.5px solid var(--ink); background: #fff; color: var(--ink); cursor: pointer; width: 100%; }
+.state-btn.primary { background: var(--g); border-color: var(--g); color: #fff; }
+.state-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+.state-link { display: block; text-align: center; margin-top: 14px; font-size: 14px; font-weight: 600; color: var(--g); background: none; border: none; cursor: pointer; width: 100%; padding: 8px; }
+.min-card { margin: 0 0 10px; padding: 12px 14px; border-radius: 14px; background: #fff; border: 1px solid #ECE6DA; font-size: 13.5px; }
+.min-card[hidden] { display: none; }
+.min-top { display: flex; justify-content: space-between; gap: 10px; }
+.min-top .m { color: var(--sub); white-space: nowrap; }
+.min-bar { margin-top: 9px; height: 6px; border-radius: 3px; background: #EFEAE0; overflow: hidden; }
+.min-bar > div { height: 100%; background: #C27C0E; border-radius: 3px; transition: width .2s; }
+.min-chips { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+.min-chips button { min-height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid #DED7C8; background: #fff; font-size: 13px; cursor: pointer; color: var(--ink); }
+.min-note { margin-top: 8px; font-size: 12.5px; color: var(--sub); }
+.time-pill.off { opacity: .55; pointer-events: none; background: #F6F3EC !important; color: #8A8F84 !important; }
+.time-pill .off-note { float: right; font-size: 12.5px; font-weight: 400; }
+.err-toast { margin-top: 10px; padding: 14px 16px; border-radius: 14px; background: var(--ink); color: #fff; display: flex; justify-content: space-between; align-items: center; gap: 12px; text-align: left; font-size: 14px; line-height: 1.45; }
+.err-toast span { opacity: .75; }
+.err-toast button { min-height: 40px; padding: 0 16px; border-radius: 10px; border: none; background: #fff; color: var(--ink); font-weight: 600; font-size: 14px; cursor: pointer; }
+.nr-list { margin-top: 12px; color: var(--ink); }
+.nr-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-top: 1px solid #ECE6DA; font-size: 15px; font-weight: 600; }
+.nr-row:last-child { border-bottom: 1px solid #ECE6DA; }
+.nr-add { min-height: 40px; padding: 0 16px; border-radius: 10px; border: 1.5px solid var(--g); background: #fff; color: var(--g); font-weight: 600; font-size: 14px; cursor: pointer; }
+
+.promo-strip { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 16px 0; padding: 10px 14px; border-radius: 12px; background: #EDF6E2; color: #2C5A1E; font-size: 14px; }
+.promo-strip[hidden] { display: none; }
+.promo-strip b { font-family: 'IBM Plex Mono', monospace; }
+.promo-strip button { border: 0; background: none; font-size: 18px; min-width: 44px; min-height: 44px; color: #2C5A1E; cursor: pointer; }
+.co-code[open] summary { margin-bottom: 8px; }
+.co-code summary { min-height: 44px; display: flex; align-items: center; font-weight: 600; color: var(--g); cursor: pointer; }
+/* Responsive */
+@media (min-width: 600px) {
+  #menu-app { max-width: 720px; }
+  .menu-card { padding: 14px; }
+  .card-photo { width: 100px; height: 100px; }
+}
+</style>
+
+<script>
+  // Cards at qty 0 show a plain outlined "+" (Add); at 1+ they show the green stepper.
+  (function () {
+    document.querySelectorAll(".card-stepper .qty").forEach(q => {
+      const sync = () => q.closest(".card-stepper").classList.toggle("zero", (parseInt(q.textContent, 10) || 0) === 0);
+      sync();
+      new MutationObserver(sync).observe(q, { childList: true, characterData: true, subtree: true });
+    });
+  })();
+</script>
+<script>
+(() => {
+  const PICKUP_LAT = {{ pickup_lat }};
+  const PICKUP_LNG = {{ pickup_lng }};
+  const ZONES = {{ zones | tojson }};
+  const FREE_DELIVERY_ABOVE = {{ free_delivery_above }};
+  const FREE_DELIVERY_ENABLED = {{ 'true' if delivery_free_enabled else 'false' }};
+  const PICKUP_NOTE = "Pickup at {{ biz.pickup_line }}. Usually ready in 20 to 25 minutes.";
+  const GOOGLE_MAPS_API_KEY = "{{ google_maps_api_key }}";
+  const PACKING_FEE = {{ packing_fee }};
+  const PACKING_FEE_LARGE = {{ packing_fee_large }};
+  const PACKING_FEE_THRESHOLD = {{ packing_fee_threshold }};
+  const GST_RATE = {{ gst_rate }};
+  const GST_ENABLED = {{ "true" if gst_enabled else "false" }};
+  const UPI_VPA = "{{ upi_vpa }}";
+  const UPI_PAYEE = "{{ upi_payee_name }}";
+
+  // Build a UPI Intent deep-link: opens the customer's UPI app pre-filled with
+  // The shop's VPA, the order amount and a transaction ref = the order id.
+  function upiLink(amount, txnRef) {
+    if (!UPI_VPA) return "";
+    const p = new URLSearchParams();
+    p.set("pa", UPI_VPA);
+    p.set("pn", UPI_PAYEE);
+    p.set("am", amount);
+    p.set("cu", "INR");
+    p.set("tr", txnRef);
+    p.set("tn", "{{ biz.name }} order " + txnRef);
+    return "upi://pay?" + p.toString();
+  }
+
+  function packingFeeFor(subtotal) {
+    if (!PACKING_FEE) return 0;
+    return subtotal >= PACKING_FEE_THRESHOLD ? PACKING_FEE_LARGE : PACKING_FEE;
+  }
+  function gstFor(taxableBase) {
+    return GST_ENABLED ? Math.round(taxableBase * GST_RATE * 100) / 100 : 0;
+  }
+
+  // Lazy-load the Google Maps JS API (places library) only when checkout
+  // actually opens, and only if a key is configured — otherwise checkout
+  // just uses the plain address textarea, no map.
+  let googleMapsPromise = null;
+  function loadGoogleMaps() {
+    if (window.google && window.google.maps) return Promise.resolve(window.google.maps);
+    if (googleMapsPromise) return googleMapsPromise;
+    googleMapsPromise = new Promise((resolve, reject) => {
+      window.__initGoogleMaps = () => resolve(window.google.maps);
+      const script = document.createElement("script");
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&callback=__initGoogleMaps`;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+    return googleMapsPromise;
+  }
+
+  const CART_KEY = "cp_menu_cart";
+  // Checkout form state (name/phone/address/etc.) — separate from the cart
+  // itself, which already persists. Without this, reopening the checkout
+  // panel (or a reload mid-typing) wipes everything the customer entered.
+  const DETAILS_KEY = "cp_checkout_details";
+  const DETAIL_FIELDS = ["name", "phone", "order_type", "address", "landmark",
+    "pincode", "payment_method", "instructions"];
+  const cart = {};
+  const PRICES = {};
+  const NAMES = {};
+  // Opened from the WhatsApp bot's Order now button: number already known.
+  const WA_CUSTOMER = {{ wa_customer | tojson }};
+  const cartBar = document.getElementById("cart-bar");
+  const cartCount = document.getElementById("cart-count");
+  const cartSubtotal = document.getElementById("cart-subtotal");
+  const searchInput = document.getElementById("search-input");
+  const noResults = document.getElementById("no-results");
+  const menuMain = document.getElementById("menu-main");
+
+  let activeCategory = "all";
+
+  // Build price/name/availability lookup
+  const AVAILABLE = {};
+  document.querySelectorAll(".menu-card").forEach(card => {
+    const id = card.dataset.id;
+    const priceEl = card.querySelector(".card-price");
+    if (priceEl) PRICES[id] = parseInt(priceEl.textContent.replace(/[₹,]/g, ""));
+    NAMES[id] = card.querySelector(".card-name")?.textContent || card.dataset.name;
+    AVAILABLE[id] = !card.classList.contains("off");
+  });
+
+  // Deep link: /menu?code=TRIAL15 saves the code on this phone; checkout applies it.
+  const PROMO_KEY = "cp_promo_code";
+  try {
+    const q = new URLSearchParams(location.search).get("code");
+    if (q && /^[A-Za-z0-9]{1,20}$/.test(q)) localStorage.setItem(PROMO_KEY, q.toUpperCase());
+  } catch (_) { /* storage unavailable */ }
+  const savedPromo = () => { try { return localStorage.getItem(PROMO_KEY) || ""; } catch (_) { return ""; } };
+  (function showPromoStrip() {
+    const strip = document.getElementById("promo-strip"), code = savedPromo();
+    if (!strip || !code) return;
+    document.getElementById("promo-code").textContent = code; strip.hidden = false;
+    document.getElementById("promo-x").onclick = () => { try { localStorage.removeItem(PROMO_KEY); } catch (_) {} strip.hidden = true; };
+  })();
+
+  // Restore cart from a previous visit
+  try {
+    const saved = JSON.parse(localStorage.getItem(CART_KEY) || "{}");
+    Object.entries(saved).forEach(([id, qty]) => {
+      if (PRICES[id] !== undefined && qty > 0) cart[id] = qty;
+    });
+  } catch (_) { /* ignore corrupt storage */ }
+
+  function saveCart() {
+    try { localStorage.setItem(CART_KEY, JSON.stringify(cart)); } catch (_) { /* storage unavailable */ }
+  }
+
+  // Stepper buttons
+  document.querySelectorAll(".card-stepper").forEach(stepper => {
+    const id = stepper.dataset.id;
+    const qtyEl = stepper.querySelector("[data-role=qty]");
+    stepper.querySelector("[data-act=inc]").addEventListener("click", () => {
+      cart[id] = (cart[id] || 0) + 1;
+      qtyEl.textContent = cart[id];
+      updateCart();
+    });
+    stepper.querySelector("[data-act=dec]").addEventListener("click", () => {
+      if (!cart[id]) return;
+      cart[id]--;
+      if (cart[id] <= 0) delete cart[id];
+      qtyEl.textContent = cart[id] || 0;
+      updateCart();
+    });
+  });
+
+  function updateCart() {
+    saveCart();
+    const ids = Object.keys(cart);
+    const count = ids.reduce((s, id) => s + cart[id], 0);
+    const subtotal = ids.reduce((s, id) => s + (PRICES[id] || 0) * cart[id], 0);
+    cartCount.textContent = count;
+    cartSubtotal.textContent = "₹" + subtotal;
+    cartBar.classList.toggle("hidden", count === 0);
+    updateMinCard(subtotal);
+  }
+
+  // Delivery minimum: lowest zone minimum, shown as progress with cheap add-ons.
+  function updateMinCard(subtotal) {
+    const card = document.getElementById("min-card");
+    if (!card) return;
+    const min = Math.min(...ZONES.map(z => z.min_order));
+    if (!(subtotal > 0 && subtotal < min)) { card.hidden = true; return; }
+    const left = min - subtotal;
+    card.hidden = false;
+    document.getElementById("min-text").innerHTML = `Add <b style="font-weight:600">₹${left}</b> more for delivery`;
+    document.getElementById("min-m").textContent = "min ₹" + min;
+    document.getElementById("min-fill").style.width = Math.round(subtotal / min * 100) + "%";
+    const chips = ["masala-chai", "roasted-papad", "aloo-paratha"].filter(id => AVAILABLE[id] && PRICES[id] != null && !cart[id]).slice(0, 2);
+    document.getElementById("min-chips").innerHTML = chips.map(id => `<button type="button" data-id="${id}">+ ${NAMES[id]} ₹${PRICES[id]}</button>`).join("");
+    document.querySelectorAll("#min-chips button").forEach(b => b.addEventListener("click", () => {
+      const inc = document.querySelector(`.card-stepper[data-id="${b.dataset.id}"] [data-act=inc]`);
+      if (inc) inc.click();
+    }));
+  }
+
+  // Apply saved cart quantities to the stepper UI on load
+  document.querySelectorAll(".card-stepper").forEach(s => {
+    const id = s.dataset.id;
+    if (cart[id]) s.querySelector("[data-role=qty]").textContent = cart[id];
+  });
+  updateCart();
+
+  // Filtering: category chips + search share one predicate so empty
+  // sections never end up with a floating, item-less heading.
+  function render() {
+    const q = searchInput.value.toLowerCase().trim();
+    let totalVisible = 0;
+    document.querySelectorAll(".group").forEach(sec => {
+      let visibleInGroup = 0;
+      sec.querySelectorAll(".menu-card").forEach(card => {
+        let visible;
+        if (q) {
+          visible = card.dataset.name.includes(q);
+        } else if (activeCategory === "all") {
+          visible = card.dataset.popular === "true";
+        } else {
+          visible = sec.id === "g-" + activeCategory;
+        }
+        card.style.display = visible ? "" : "none";
+        if (visible) visibleInGroup++;
+      });
+      sec.style.display = visibleInGroup > 0 ? "" : "none";
+      totalVisible += visibleInGroup;
+    });
+    noResults.hidden = totalVisible > 0;
+    if (totalVisible === 0) {
+      const esc = t => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+      const near = [...document.querySelectorAll(".menu-card:not(.off)")]
+        .filter(c => c.dataset.popular === "true").slice(0, 3);
+      noResults.innerHTML = `
+        <h3 style="font-family:'Bricolage Grotesque',sans-serif;font-size:21px;color:var(--ink);text-align:left;margin-top:8px">No ${esc(q)} on our menu</h3>
+        <p style="text-align:left;font-size:14px;color:#4A4F45;margin-top:6px">Closest dishes we make:</p>
+        <div class="nr-list">${near.map(c => `<div class="nr-row"><span>${esc(c.querySelector(".card-name").textContent)}</span><button type="button" class="nr-add" data-id="${esc(c.dataset.id)}">Add</button></div>`).join("")}</div>
+        <p style="text-align:left;font-size:14px;margin-top:14px;color:var(--ink)">Looking for something else? <a href="{{ wa_order_link("Hi, do you make " ) }}${encodeURIComponent(q)}" target="_blank" rel="noopener" style="color:var(--g);font-weight:600">Ask on WhatsApp</a></p>`;
+      noResults.querySelectorAll(".nr-add").forEach(b => b.addEventListener("click", () => {
+        const inc = document.querySelector(`.card-stepper[data-id="${b.dataset.id}"] button[data-act="inc"]`);
+        if (inc) inc.click();
+        b.textContent = "Added ✓";
+      }));
+    }
+  }
+  render();
+
+  // Group nav
+  document.querySelectorAll(".chip").forEach(chip => {
+    chip.addEventListener("click", (e) => {
+      e.preventDefault();
+      searchInput.value = "";
+      activeCategory = chip.dataset.group;
+      document.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+      chip.classList.add("active");
+      render();
+      menuMain.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+
+  // Deep-link support: /menu#g-3 opens straight into that category
+  if (location.hash.startsWith("#g-")) {
+    const g = location.hash.slice(3);
+    const chip = document.querySelector(`.chip[data-group="${g}"]`);
+    if (chip) chip.click();
+  }
+
+  // Search (overrides the active category while a query is present)
+  searchInput.addEventListener("input", render);
+
+  // Checkout
+  document.getElementById("cart-checkout").addEventListener("click", (e) => {
+    e.preventDefault();
+    if (!Object.keys(cart).length) return;
+    openCheckout();
+  });
+
+  function openCheckout() {
+    const overlay = document.createElement("div");
+    overlay.className = "checkout-overlay";
+    let coStep = 1;
+    const ids = Object.keys(cart);
+    const subtotal = ids.reduce((s, id) => s + (PRICES[id] || 0) * cart[id], 0);
+    const items = ids.map(id => `<div class="checkout-row"><span>${NAMES[id]} × ${cart[id]}</span><span>₹${(PRICES[id] || 0) * cart[id]}</span></div>`).join("");
+    overlay.innerHTML = `
+      <div class="checkout-panel" style="position:relative">
+        <div class="co-grab"></div>
+        <div class="co-top"><button type="button" class="co-back" id="co-back">‹ BACK</button><button type="button" class="checkout-close" id="checkout-close" aria-label="Close checkout">✕</button></div>
+        <div class="co-progress" id="co-progress"><span class="on"></span><span></span><span></span></div>
+        <form id="checkout-form" novalidate>
+          <div class="co-body">
+            <section class="co-step" data-step="1">
+              <h2 class="co-title">How and when?</h2>
+              <div class="checkout-field">
+            <label>Order type</label>
+            <input type="hidden" name="order_type" value="delivery">
+            <div class="time-pills" id="order-type-tiles">
+              <button type="button" class="time-pill active" data-value="delivery">Delivery</button>
+              <button type="button" class="time-pill" data-value="pickup">Pickup</button>
+            </div>
+          </div>
+          <div class="checkout-field">
+            <label>When do you want it?</label>
+            <select id="schedule-date" class="schedule-date-select"></select>
+            <div class="time-pills" id="time-pills">
+              <button type="button" class="time-pill active" data-preset="asap">As soon as possible</button>
+              <button type="button" class="time-pill" data-preset="lunch">Lunch ({{ win.lunch.text }})</button>
+              <button type="button" class="time-pill" data-preset="dinner">Dinner ({{ win.dinner.text }})</button>
+            </div>
+            <div style="font-size:11px;color:#6F7468;margin-top:4px;">Pick a window; no need for an exact time. For today's orders "As soon as possible" means within the hour.</div>
+            <input type="hidden" name="scheduled_at" id="input-scheduled">
+            <input type="hidden" name="scheduled_window" id="input-window">
+          </div>
+              <div class="co-label">Your details</div>
+              <div class="checkout-field"><label>Phone</label><input name="phone" type="tel" inputmode="numeric" autocomplete="tel-national" required placeholder="10-digit mobile number" pattern="[0-9]{10,}">
+            <div class="checkout-hint">We'll fill in your saved address if you've ordered before.</div></div>
+          <div class="checkout-field"><label>Name</label><input name="name" autocomplete="name" required placeholder="Your name"></div>
+            </section>
+            <section class="co-step" data-step="2" hidden>
+              <h2 class="co-title">Where should we deliver?</h2>
+              <div class="checkout-field" id="saved-addr-field" hidden>
+            <label>You have ordered here before</label>
+            <div class="saved-addr-list" id="saved-addr-list"></div>
+          </div>
+          <div class="checkout-field" id="addr-field"><label>Address</label>
+            {% if google_maps_api_key %}
+            <input type="text" name="address" id="address-input" placeholder="Flat, building and street, then pick from the list" autocomplete="off" required>
+            <div class="checkout-hint">Pick a suggestion, or tap "Use my location" and drag the pin onto your door.</div>
+            {% else %}
+            <textarea name="address" rows="2" placeholder="Flat/house number, building, street" required></textarea>
+            {% endif %}
+            <div id="map-pin" class="map-pin"></div>
+            <div id="map-address-preview" class="map-address-preview"></div>
+            <div class="state-card" id="pin-check" hidden>
+              <div class="state-kicker" style="color:#B06A00" id="pin-check-k"></div>
+              <h3>Is the pin on your door?</h3>
+              <p id="pin-check-p">Riders follow the pin.</p>
+              <div class="state-row"><button type="button" class="state-btn" id="pin-move">Move the pin</button><button type="button" class="state-btn primary" id="pin-ok">Yes, it's right</button></div>
+            </div>
+            <div class="state-card" id="outside-card" hidden>
+              <div class="state-kicker" style="color:#9A3324" id="outside-k"></div>
+              <h3>We deliver up to {{ radius_km }} km</h3>
+              <p>Your cart is kept. Pick it up from the kitchen instead, ready at your chosen time.</p>
+              <button type="button" class="state-btn primary" id="outside-pickup" style="margin-top:18px">Switch to pickup</button>
+              <div style="margin-top:8px;font-size:12.5px;color:var(--sub);text-align:center">{{ biz.pickup_line }}</div>
+              <button type="button" class="state-link" id="outside-retry">Try another address</button>
+            </div>
+            <button type="button" id="gps-btn" style="margin-top:6px;font-size:12px;padding:5px 10px;border:1px solid #C9C4B8;border-radius:8px;background:#fff;cursor:pointer;color:#4A4F45;">📍 Use my location</button>
+            <span id="gps-status" style="font-size:11px;color:#888;margin-left:6px;"></span>
+            <input type="hidden" name="lat" id="input-lat">
+            <input type="hidden" name="lng" id="input-lng">
+          </div>
+          <div class="checkout-field" id="landmark-field"><label>Nearest landmark</label><input name="landmark" placeholder="e.g. opposite the park gate" required>
+            <div class="checkout-hint">Riders always ask for this.</div>
+          </div>
+          <div class="checkout-field" id="pin-field"><label>Pincode</label><input name="pincode" inputmode="numeric" autocomplete="postal-code" pattern="[0-9]{6}" maxlength="6" placeholder="Filled in from your address"></div>
+            </section>
+            <section class="co-step" data-step="3" hidden>
+              <h2 class="co-title">Check and place</h2>
+              <div class="checkout-summary"></div>
+              <div class="checkout-nudge" id="checkout-nudge" hidden>
+                <div class="checkout-nudge-title">One delivery, however much you order</div>
+                <div class="checkout-nudge-sub">The delivery fee is the same however much you order.</div>
+                <div class="checkout-nudge-chips"></div>
+              </div>
+              <div class="co-label">Pay</div>
+              <div class="checkout-field">
+            <input type="hidden" name="payment_method" id="payment-method" value="{{ 'upi' if upi_vpa else 'cod' }}">
+            <div class="time-pills" id="payment-tiles">
+              {% if upi_vpa %}<button type="button" class="time-pill active" data-value="upi">Pay by UPI</button>{% endif %}
+              <button type="button" class="time-pill{% if not upi_vpa %} active{% endif %}" data-value="cod">Cash on delivery</button>
+            </div>
+            <div class="checkout-hint" id="pay-hint"></div>
+          </div>
+          <div class="checkout-field"><label>Note</label><input name="instructions" placeholder="e.g. no coriander"></div>
+          <details class="co-code" id="co-code">
+            <summary>Have a discount code?</summary>
+            <div class="co-code-row">
+              <input id="code-input" placeholder="Enter code" autocapitalize="characters" autocomplete="off" maxlength="20">
+              <button type="button" id="code-apply">Apply</button>
+            </div>
+            <div class="checkout-hint" id="code-msg"></div>
+          </details>
+            </section>
+          </div>
+          <div class="co-footer">
+            <div class="co-foot-note" id="co-foot-note"></div>
+            <div class="co-total" id="co-total" hidden><span>Total</span><span id="co-total-amt"></span></div>
+            <button type="submit" class="checkout-place" id="place-btn">Continue</button>
+            <div class="checkout-msg" id="checkout-msg"></div>
+          </div>
+        </form>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    overlay.querySelector("#checkout-close").addEventListener("click", () => overlay.remove());
+
+    // Discount code: tucked away under "Have a discount code?". The server
+    // re-checks it when the order is placed; this is only the preview.
+    let appliedCode = null;  // {code, kind, value, max_discount, min_subtotal, label}
+    const discountFor = (sub) => {
+      if (!appliedCode || sub < (appliedCode.min_subtotal || 0)) return 0;
+      let d = appliedCode.kind === "percent" ? sub * appliedCode.value / 100 : appliedCode.value;
+      if (appliedCode.max_discount) d = Math.min(d, appliedCode.max_discount);
+      return Math.round(Math.min(d, sub) * 100) / 100;
+    };
+    const codeInput = overlay.querySelector("#code-input");
+    const codeMsg = overlay.querySelector("#code-msg");
+    async function applyCode() {
+      const code = codeInput.value.trim();
+      if (!code) return;
+      const sub = Object.keys(cart).reduce((s, id) => s + (PRICES[id] || 0) * cart[id], 0);
+      const phone = overlay.querySelector('[name=phone]').value.trim();
+      codeMsg.style.color = ""; codeMsg.textContent = "Checking…";
+      try {
+        const r = await fetch(`/api/discount/check?code=${encodeURIComponent(code)}&subtotal=${sub}` + (phone ? `&phone=${encodeURIComponent(phone)}` : ""));
+        const d = await r.json();
+        appliedCode = d.valid ? d : null;
+        codeMsg.style.color = d.valid ? "var(--g, #0E7A45)" : "#B3261E";
+        codeMsg.textContent = d.message;
+      } catch (_) {
+        codeMsg.style.color = "#B3261E"; codeMsg.textContent = "Couldn't check the code. Try again.";
+      }
+      refreshCheckoutSummary();
+    }
+    overlay.querySelector("#code-apply").addEventListener("click", applyCode);
+    // A code saved from a link or the bio page is filled in and checked straight away.
+    { const sp = savedPromo(); if (sp) { codeInput.value = sp; overlay.querySelector("#co-code").open = true; applyCode(); } }
+    codeInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); applyCode(); } });
+    codeInput.addEventListener("input", () => { if (appliedCode) { appliedCode = null; codeMsg.textContent = ""; refreshCheckoutSummary(); } });
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+
+    // Persist in-progress checkout details (separate from the cart, which
+    // already survives via CART_KEY) so closing the panel, reloading, or
+    // getting bumped off the page mid-checkout doesn't lose everything the
+    // customer already typed.
+    function saveDetails() {
+      try {
+        const data = {};
+        DETAIL_FIELDS.forEach(f => {
+          const el = form.querySelector(`[name=${f}]`);
+          if (el) data[f] = el.value;
+        });
+        data.lat = inputLat.value || "";
+        data.lng = inputLng.value || "";
+        data.preset = overlay.querySelector(".time-pill.active")?.dataset.preset || "asap";
+        localStorage.setItem(DETAILS_KEY, JSON.stringify(data));
+      } catch (_) { /* storage unavailable */ }
+    }
+
+    function restoreDetails() {
+      let saved;
+      try { saved = JSON.parse(localStorage.getItem(DETAILS_KEY) || "null"); } catch (_) { saved = null; }
+      if (!saved) return;
+      DETAIL_FIELDS.forEach(f => {
+        const el = form.querySelector(`[name=${f}]`);
+        if (el && saved[f]) el.value = saved[f];
+      });
+      syncTapTiles("order-type-tiles", typeSelect.value);
+      if (paySelect) syncTapTiles("payment-tiles", paySelect.value);
+      typeSelect.dispatchEvent(new Event("change"));
+      if (paySelect) paySelect.dispatchEvent(new Event("change"));
+      // Ignore a stored pin that is just the kitchen's own default from an older session.
+      if (saved.lat && saved.lng && haversineKm(+saved.lat, +saved.lng, PICKUP_LAT, PICKUP_LNG) > 0.1) movePin(saved.lat, saved.lng, false);
+      if (saved.preset && saved.preset !== "asap") {
+        const pill = overlay.querySelector(`.time-pill[data-preset="${saved.preset}"]`);
+        if (pill && !pill.hidden) pill.click();
+      }
+      refreshCheckoutSummary();
+    }
+
+    // Small-cart nudge: cheap, quick-add items shown while the order is
+    // light — no minimum order exists, but delivery costs the same either
+    // way, so it's worth surfacing an easy add rather than nothing at all.
+    const UPSELL_ITEMS = ["roasted-papad", "masala-chai", "masala-thumsup"];
+    const UPSELL_THRESHOLD = 300;
+
+    // Live delivery quote: works out the straight-line distance from the pickup
+    // point to the dropped pin and finds the matching zone, so the customer sees
+    // the delivery fee (and the area's minimum order) BEFORE they place the order
+    // instead of only after. No pin yet = "unknown", still quoteable on submit.
+    function haversineKm(aLat, aLng, bLat, bLng) {
+      const R = 6371, toR = Math.PI / 180;
+      const dLat = (bLat - aLat) * toR, dLng = (bLng - aLng) * toR;
+      const s = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(aLat * toR) * Math.cos(bLat * toR) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      return 2 * R * Math.asin(Math.sqrt(s));
+    }
+
+    function quoteDelivery(subtotal) {
+      const lat = parseFloat(overlay.querySelector("#input-lat")?.value);
+      const lng = parseFloat(overlay.querySelector("#input-lng")?.value);
+      if (!isFinite(lat) || !isFinite(lng)) return null; // no pin yet
+      const km = haversineKm(lat, lng, PICKUP_LAT, PICKUP_LNG);
+      for (const z of ZONES) {
+        if (km <= z.max_km) {
+          return {
+            zone: z.name, km,
+            fee: FREE_DELIVERY_ENABLED && subtotal >= FREE_DELIVERY_ABOVE ? 0 : z.fee,
+            min_order: z.min_order, outside: false,
+          };
+        }
+      }
+      return { zone: null, km, fee: null, min_order: null, outside: true };
+    }
+
+    // Server quote from /api/delivery/quote (the fixed fee for the pin's
+    // distance band). The zone table (`q`) shows instantly as a placeholder
+    // and the server's answer replaces it, so both always agree.
+    let liveQuote = null;       // {fee, serviceable, min_order, provider, ...}
+    let liveQuoteKey = null;    // pin+subtotal key the cached quote covers
+    let quoteTimer = null, quoteSeq = 0;
+
+    function liveQuoteContext() {
+      const lat = parseFloat(overlay.querySelector("#input-lat")?.value);
+      const lng = parseFloat(overlay.querySelector("#input-lng")?.value);
+      const subtotal = Object.keys(cart).reduce((s, id) => s + (PRICES[id] || 0) * cart[id], 0);
+      if (!isFinite(lat) || !isFinite(lng)) return null;
+      return { key: `${lat.toFixed(4)},${lng.toFixed(4)},${subtotal}`, lat, lng, subtotal };
+    }
+
+    function scheduleLiveQuote() {
+      const ctx = liveQuoteContext();
+      if (!ctx) { liveQuote = null; liveQuoteKey = null; return; }
+      if (ctx.key === liveQuoteKey) return; // already quoted for this pin+amount
+      clearTimeout(quoteTimer);
+      const seq = ++quoteSeq;
+      quoteTimer = setTimeout(async () => {
+        try {
+          const r = await fetch(`/api/delivery/quote?lat=${ctx.lat}&lng=${ctx.lng}&subtotal=${Math.round(ctx.subtotal)}`);
+          const d = await r.json();
+          if (seq !== quoteSeq || !d || d.serviceable === false) { liveQuote = null; return; }
+          liveQuote = d;
+          liveQuoteKey = ctx.key;
+          refreshCheckoutSummary();
+        } catch (_) { liveQuote = null; }
+      }, 300);
+    }
+
+    function refreshCheckoutSummary() {
+      const currentIds = Object.keys(cart);
+      const currentSubtotal = currentIds.reduce((s, id) => s + (PRICES[id] || 0) * cart[id], 0);
+      const packing = packingFeeFor(currentSubtotal);
+      const discount = discountFor(currentSubtotal);
+      const gst = gstFor(currentSubtotal - discount + packing);
+      const isDelivery = overlay.querySelector('[name=order_type]').value === "delivery";
+      const q = isDelivery ? quoteDelivery(currentSubtotal) : null;
+
+      let deliveryRow, deliveryNote, deliveryFee = 0, footText = "";
+      if (isDelivery) {
+        const eff = (liveQuote && liveQuote.serviceable) ? liveQuote : q;
+        if (eff && eff.outside) {
+          deliveryRow = `<div class="checkout-row" style="color:#B3261E"><span>Delivery</span><span>Too far for delivery. Choose pickup</span></div>`;
+          deliveryNote = `<span style="color:#B3261E">We don't deliver ${eff.km ? Math.round(eff.km) + " km away" : "that far"}. Pickup is in {{ biz.locality }}.</span>`;
+        } else if (eff) {
+          deliveryFee = +eff.fee || 0;
+          footText = `<span>${eff.km ? "<b>" + eff.km.toFixed(1) + " km</b> · " : ""}Delivery ₹${deliveryFee}</span>` + (eff.min_order ? `<span style="color:${currentSubtotal >= eff.min_order ? "var(--g)" : "#B3261E"};font-weight:600">Min ₹${eff.min_order}${currentSubtotal >= eff.min_order ? " ✓" : ""}</span>` : "");
+          deliveryRow = `<div class="checkout-row"><span>Delivery${eff.km ? ` (${eff.km.toFixed(1)} km)` : ""}</span><span>${deliveryFee ? "₹" + deliveryFee : "Free"}</span></div>`;
+          deliveryNote = `Delivery is a fixed ₹${deliveryFee} for your distance and it's already in this total. Nothing is added later.${
+            currentSubtotal && currentSubtotal < eff.min_order
+            ? ` <span style="color:#B3261E">Minimum order here is ₹${eff.min_order}.</span>` : ""}`;
+        } else {
+          const fees = ZONES.map(z => z.fee);
+          deliveryRow = `<div class="checkout-row"><span>Delivery</span><span>Add address</span></div>`;
+          deliveryNote = `Add your address to see your delivery fee: a fixed ₹${Math.min(...fees)}–${Math.max(...fees)} depending on distance, included in the total.`;
+        }
+      } else {
+        deliveryNote = PICKUP_NOTE;
+      }
+
+      overlay.querySelector(".checkout-summary").innerHTML =
+        currentIds.map(id => `
+          <div class="checkout-row checkout-item-row">
+            <span class="checkout-item-name">${NAMES[id]}</span>
+            <div class="checkout-item-qty">
+              <button type="button" class="qty-btn" data-id="${id}" data-delta="-1" aria-label="Remove one ${NAMES[id]}">−</button>
+              <span class="qty-val">${cart[id]}</span>
+              <button type="button" class="qty-btn" data-id="${id}" data-delta="1" aria-label="Add one ${NAMES[id]}">+</button>
+            </div>
+            <span class="checkout-item-price">₹${(PRICES[id] || 0) * cart[id]}</span>
+          </div>
+        `).join("")
+        + (currentSubtotal > 0 ? `
+          <div class="checkout-row"><span>Subtotal</span><span>₹${currentSubtotal}</span></div>
+          ${discount ? `<div class="checkout-row" style="color:var(--g, #0E7A45)"><span>Discount (${appliedCode.code})</span><span>−₹${discount.toFixed(2).replace(/\.00$/, "")}</span></div>` : ""}
+          ${packing ? `<div class="checkout-row"><span>Packing charge</span><span>₹${packing}</span></div>` : ""}
+          ${gst ? `<div class="checkout-row"><span>GST (${(GST_RATE * 100).toFixed(0)}%)</span><span>₹${gst.toFixed(2)}</span></div>` : ""}
+        ` : "")
+        + (deliveryRow ? deliveryRow : "")
+        + `<div class="checkout-row total"><span>Total</span><span>₹${(currentSubtotal - discount + packing + gst + deliveryFee).toFixed(2)}</span></div>
+           <div class="checkout-row-note">${deliveryNote || "This is the final total. Nothing is added later."}</div>`;
+      const grand = Math.round((currentSubtotal - discount + packing + gst + deliveryFee) * 100) / 100;
+      const placeBtn = overlay.querySelector("#place-btn");
+      const totAmt = overlay.querySelector("#co-total-amt");
+      if (totAmt) totAmt.textContent = "₹" + grand.toFixed(2);
+      const footEl = overlay.querySelector("#co-foot-note");
+      if (footEl) footEl.innerHTML = coStep === 2 ? footText : "";
+      if (placeBtn && !placeBtn.disabled && coStep === 3) placeBtn.textContent = "Place order";
+
+      // Let the customer adjust quantities without leaving checkout — closing
+      // the panel to go back to the menu grid just to change a "2" to a "1"
+      // was the only way to do this before.
+      overlay.querySelectorAll(".qty-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.dataset.id;
+          const delta = Number(btn.dataset.delta);
+          cart[id] = (cart[id] || 0) + delta;
+          if (cart[id] <= 0) delete cart[id];
+          updateCart();
+          const stepperQty = document.querySelector(`.card-stepper[data-id="${id}"] .qty`);
+          if (stepperQty) stepperQty.textContent = String(cart[id] || 0);
+          if (Object.keys(cart).length === 0) { overlay.remove(); return; }
+          refreshCheckoutSummary();
+        });
+      });
+
+      const nudge = overlay.querySelector("#checkout-nudge");
+      const candidates = UPSELL_ITEMS.filter(id => !cart[id] && PRICES[id] != null && AVAILABLE[id]);
+      if (currentSubtotal > 0 && currentSubtotal < UPSELL_THRESHOLD && candidates.length) {
+        nudge.hidden = false;
+        nudge.querySelector(".checkout-nudge-chips").innerHTML = candidates.map(id =>
+          `<button type="button" class="nudge-chip" data-id="${id}">+ ${NAMES[id]} ₹${PRICES[id]}</button>`
+        ).join("");
+        nudge.querySelectorAll(".nudge-chip").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const id = btn.dataset.id;
+            cart[id] = (cart[id] || 0) + 1;
+            updateCart();
+            const stepperQty = document.querySelector(`.card-stepper[data-id="${id}"] .qty`);
+            if (stepperQty) stepperQty.textContent = String(cart[id]);
+            refreshCheckoutSummary();
+          });
+        });
+      } else {
+        nudge.hidden = true;
+      }
+      scheduleLiveQuote();
+    }
+    refreshCheckoutSummary();
+
+    const form = overlay.querySelector("#checkout-form");
+    const inputLat = overlay.querySelector("#input-lat");
+    const inputLng = overlay.querySelector("#input-lng");
+    let gMap = null, gMarker = null, gGeocoder = null, anchor = null;
+    form.addEventListener("input", saveDetails);
+    form.addEventListener("change", saveDetails);
+
+    // Order type / payment are tap-tiles over a hidden input, not a <select> —
+    // same pattern the schedule tiles already used. Clicking a tile sets the
+    // hidden input's value and fires a real "change" event, so every existing
+    // listener on that input (form submit, checkout summary refresh, address
+    // field show/hide, details persistence) keeps working unmodified.
+    function wireTapTiles(containerId, hiddenInput) {
+      const container = overlay.querySelector("#" + containerId);
+      if (!container) return;
+      container.querySelectorAll(".time-pill").forEach(btn => {
+        btn.addEventListener("click", () => {
+          container.querySelectorAll(".time-pill").forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+          hiddenInput.value = btn.dataset.value;
+          hiddenInput.dispatchEvent(new Event("change"));
+        });
+      });
+    }
+    function syncTapTiles(containerId, value) {
+      const container = overlay.querySelector("#" + containerId);
+      if (!container) return;
+      container.querySelectorAll(".time-pill").forEach(b => b.classList.toggle("active", b.dataset.value === value));
+    }
+
+    const paySelect = overlay.querySelector("#payment-method");
+    wireTapTiles("payment-tiles", paySelect);
+    if (paySelect) {
+      const payHint = overlay.querySelector("#pay-hint");
+      const syncPaymentUI = () => {
+        payHint.textContent = paySelect.value === "upi"
+          ? "After you tap Place order, your UPI app (GPay, PhonePe, Paytm) opens with the exact amount filled in."
+          : "Pay the full total in cash (or UPI) to the rider when your food arrives.";
+      };
+      paySelect.addEventListener("change", syncPaymentUI);
+      syncPaymentUI();
+    }
+
+    function reverseGeocode(lat, lng) {
+      const preview = overlay.querySelector("#map-address-preview");
+      if (!preview || !gGeocoder) return;
+      preview.textContent = "Looking up address…";
+      gGeocoder.geocode({ location: { lat: Number(lat), lng: Number(lng) } }, (results, status) => {
+        const r = status === "OK" && results[0];
+        preview.textContent = r ? "📍 " + r.formatted_address : "";
+        if (!r) return;
+        // Fill whatever the customer hasn't typed yet: pincode always when
+        // empty, the address line only when the field is blank.
+        fillPincode(r.address_components);
+        const addr = form.querySelector('[name=address]');
+        if (addr && !addr.value.trim()) { addr.value = r.formatted_address.replace(/, India$/, ""); saveDetails(); }
+      });
+    }
+
+    function fillPincode(components) {
+      const pin = (components || []).find(c => c.types.includes("postal_code"));
+      const input = form.querySelector('[name=pincode]');
+      if (pin && input && !input.value) { input.value = pin.short_name; saveDetails(); }
+    }
+
+    function applyPin(lat, lng, geocode = true) {
+      inputLat.value = Number(lat).toFixed(6);
+      inputLng.value = Number(lng).toFixed(6);
+      if (geocode) reverseGeocode(lat, lng);
+      saveDetails();
+    }
+
+    function movePin(lat, lng, geocode = true) {
+      applyPin(lat, lng, geocode);
+      if (gMap && gMarker) {
+        const pos = { lat: Number(lat), lng: Number(lng) };
+        gMap.setCenter(pos);
+        gMap.setZoom(16);
+        gMarker.setPosition(pos);
+      }
+      refreshCheckoutSummary();
+    }
+
+    async function ensureMap() {
+      if (!GOOGLE_MAPS_API_KEY || gMap) return;
+      const mapEl = overlay.querySelector("#map-pin");
+      if (!mapEl) return;
+      const gmaps = await loadGoogleMaps();
+      gGeocoder = new gmaps.Geocoder();
+      gMap = new gmaps.Map(mapEl, {
+        center: { lat: PICKUP_LAT, lng: PICKUP_LNG }, zoom: 15,
+        streetViewControl: false, mapTypeControl: false, fullscreenControl: false,
+      });
+      gMarker = new gmaps.Marker({ position: { lat: PICKUP_LAT, lng: PICKUP_LNG }, map: gMap, draggable: true });
+      gMarker.addListener("dragend", () => {
+        const pos = gMarker.getPosition();
+        applyPin(pos.lat(), pos.lng());
+        if (anchor) {
+          const m = Math.round(haversineKm(anchor.lat, anchor.lng, pos.lat(), pos.lng()) * 1000);
+          const card = overlay.querySelector("#pin-check");
+          if (m > 300) {
+            overlay.querySelector("#pin-check-k").textContent = m + " M APART";
+            overlay.querySelector("#pin-check-p").textContent = `The pin is ${m} m from "${anchor.text}". Riders follow the pin.`;
+            card.hidden = false;
+          } else { card.hidden = true; }
+        }
+        checkOutside();
+      });
+      // Deliberately no default pin: an unpicked address must not silently use the kitchen's coordinates.
+
+      const addressInput = overlay.querySelector("#address-input");
+      if (addressInput) {
+        // No `types` filter: people type apartment/building names, which the
+        // old "address"-only filter never suggested. Biased (not limited) to
+        // ~10 km around the kitchen so local results come first.
+        const autocomplete = new gmaps.places.Autocomplete(addressInput, {
+          fields: ["geometry", "formatted_address", "address_components", "name"],
+          componentRestrictions: { country: "in" },
+          bounds: new gmaps.LatLngBounds(
+            { lat: PICKUP_LAT - 0.09, lng: PICKUP_LNG - 0.09 },
+            { lat: PICKUP_LAT + 0.09, lng: PICKUP_LNG + 0.09 }),
+          strictBounds: false,
+        });
+        autocomplete.addListener("place_changed", () => {
+          const place = autocomplete.getPlace();
+          if (!place.geometry || !place.geometry.location) return;
+          const loc = place.geometry.location;
+          movePin(loc.lat(), loc.lng(), false);
+          anchor = { lat: loc.lat(), lng: loc.lng(), text: place.name || (place.formatted_address || "").split(",")[0] };
+          overlay.querySelector("#pin-check").hidden = true;
+          checkOutside();
+          // Keep the building name: formatted_address drops it for
+          // apartments/establishments, and it's what the rider looks for.
+          const full = (place.formatted_address || "").replace(/, India$/, "");
+          addressInput.value = place.name && !full.startsWith(place.name) ? `${place.name}, ${full}` : full;
+          const pincodeInput = form.querySelector('[name=pincode]');
+          if (pincodeInput) pincodeInput.value = "";
+          fillPincode(place.address_components);
+          saveDetails();
+        });
+      }
+    }
+
+    const typeSelect = form.querySelector('[name=order_type]');
+    wireTapTiles("order-type-tiles", typeSelect);
+    const addrField = overlay.querySelector("#addr-field");
+    const landmarkField = overlay.querySelector("#landmark-field");
+    const pinField = overlay.querySelector("#pin-field");
+    typeSelect.addEventListener("change", () => {
+      const isDelivery = typeSelect.value === "delivery";
+      addrField.style.display = isDelivery ? "" : "none";
+      landmarkField.style.display = isDelivery ? "" : "none";
+      pinField.style.display = isDelivery ? "" : "none";
+      form.querySelector('[name=address]').required = isDelivery;
+      form.querySelector('[name=landmark]').required = isDelivery;
+      if (isDelivery) ensureMap();
+      refreshCheckoutSummary();
+    });
+    if (typeSelect.value === "delivery") ensureMap();
+
+    // Saved addresses: once a 10-digit phone is typed, look up past addresses
+    // for that number and offer them as one-tap picks above the free-text field.
+    const savedAddrField = overlay.querySelector("#saved-addr-field");
+    const savedAddrList = overlay.querySelector("#saved-addr-list");
+    let phoneLookupTimer = null;
+    form.querySelector('[name=phone]').addEventListener("input", (e) => {
+      clearTimeout(phoneLookupTimer);
+      const phone = e.target.value.trim();
+      if (!/^[0-9]{10,}$/.test(phone)) { savedAddrField.hidden = true; return; }
+      phoneLookupTimer = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/customer/${encodeURIComponent(phone)}`);
+          const data = await res.json();
+          const addresses = data.addresses || [];
+          if (!addresses.length) { savedAddrField.hidden = true; return; }
+          savedAddrList.innerHTML = addresses.map((a, i) => `
+            <button type="button" class="saved-addr-card" data-idx="${i}">
+              <div class="saved-addr-label">${a.label || (a.is_default ? "Usual address" : "Saved address")}</div>
+              <div class="saved-addr-text">${a.address}${a.landmark ? " · " + a.landmark : ""}</div>
+            </button>
+          `).join("");
+          savedAddrList.querySelectorAll(".saved-addr-card").forEach(card => {
+            card.addEventListener("click", () => {
+              const a = addresses[card.dataset.idx];
+              form.querySelector('[name=address]').value = a.address;
+              form.querySelector('[name=landmark]').value = a.landmark || "";
+              if (a.lat && a.lng) movePin(a.lat, a.lng, true);
+              savedAddrList.querySelectorAll(".saved-addr-card").forEach(c => c.classList.remove("selected"));
+              card.classList.add("selected");
+            });
+          });
+          savedAddrField.hidden = false;
+          // Returning customer with an empty address: use their usual one.
+          if (data.name && !form.querySelector('[name=name]').value) form.querySelector('[name=name]').value = data.name;
+          if (!form.querySelector('[name=address]').value.trim()) savedAddrList.querySelector(".saved-addr-card")?.click();
+        } catch (_) { savedAddrField.hidden = true; }
+      }, 400);
+    });
+
+    // Date + time scheduling, up to 2 weeks out. ASAP only makes sense for
+    // today; picking a future date auto-switches off it since "as soon as
+    // possible" 9 days from now isn't a real option.
+    const SCHEDULE_DAYS = 14;
+    const scheduledInput = overlay.querySelector("#input-scheduled");
+    const dateSelect = overlay.querySelector("#schedule-date");
+    const asapPill = overlay.querySelector('.time-pill[data-preset="asap"]');
+    const lunchPill = overlay.querySelector('.time-pill[data-preset="lunch"]');
+
+    dateSelect.innerHTML = Array.from({ length: SCHEDULE_DAYS }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() + i);
+      const label = i === 0 ? "Today" : i === 1 ? "Tomorrow"
+        : d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+      return `<option value="${i}">${label}</option>`;
+    }).join("");
+
+    function dateAtOffset(dayOffset, hour, minute) {
+      const d = new Date();
+      d.setDate(d.getDate() + dayOffset);
+      d.setHours(hour, minute, 0, 0);
+      return d;
+    }
+
+    function updateScheduledAt() {
+      const dayOffset = Number(dateSelect.value);
+      const preset = overlay.querySelector(".time-pill.active")?.dataset.preset || "asap";
+      const windowInput = overlay.querySelector("#input-window");
+      if (preset === "lunch") {
+        windowInput.value = "lunch";
+        scheduledInput.value = dateAtOffset(dayOffset, 13, 0).toISOString();
+      } else if (preset === "dinner") {
+        windowInput.value = "dinner";
+        scheduledInput.value = dateAtOffset(dayOffset, 19, 45).toISOString();
+      } else {
+        windowInput.value = "";
+        scheduledInput.value = "";
+      }
+    }
+
+    dateSelect.addEventListener("change", () => {
+      const isToday = dateSelect.value === "0";
+      asapPill.hidden = !isToday;
+      if (!isToday && asapPill.classList.contains("active")) {
+        asapPill.classList.remove("active");
+        lunchPill.classList.add("active");
+      }
+      updateScheduledAt();
+    });
+
+    // Mondays: no lunch window.
+    function syncMonday() {
+      const d = new Date(); d.setDate(d.getDate() + Number(dateSelect.value));
+      const off = d.getDay() === 1;
+      lunchPill.classList.toggle("off", off);
+      lunchPill.disabled = off;
+      lunchPill.innerHTML = off ? 'Lunch ({{ win.lunch.text }})<span class="off-note">No lunch on Mondays</span>' : "Lunch ({{ win.lunch.text }})";
+      if (off && lunchPill.classList.contains("active")) {
+        lunchPill.classList.remove("active");
+        const dn = timePillsContainer.querySelector('[data-preset="dinner"]');
+        dn.classList.add("active");
+        updateScheduledAt();
+      }
+    }
+    dateSelect.addEventListener("change", syncMonday);
+
+    // Scoped to #time-pills specifically, not the whole overlay — the
+    // order-type and payment fields reuse this same .time-pill class for
+    // visual consistency (see wireTapTiles above), and an overlay-wide
+    // sweep here was wiping their active state on every schedule click.
+    const timePillsContainer = overlay.querySelector("#time-pills");
+    timePillsContainer.querySelectorAll(".time-pill").forEach(pill => {
+      pill.addEventListener("click", () => {
+        timePillsContainer.querySelectorAll(".time-pill").forEach(p => p.classList.remove("active"));
+        pill.classList.add("active");
+        updateScheduledAt();
+        // If the picked window has already passed today, quietly fall back to
+        // ASAP rather than letting the server reject on submit.
+        if (dateSelect.value === "0" && scheduledInput.value) {
+          const when = new Date(scheduledInput.value);
+          if (when.getTime() < Date.now()) {
+            timePillsContainer.querySelectorAll(".time-pill").forEach(p => p.classList.remove("active"));
+            asapPill.classList.add("active");
+            updateScheduledAt();
+          }
+        }
+        saveDetails();
+      });
+    });
+
+    restoreDetails();
+    syncMonday();
+    // Returning customer: prefill name/phone from their last order, then run
+    // the phone lookup so their saved address fills itself in.
+    try {
+      const me = JSON.parse(localStorage.getItem("cp_customer") || "null");
+      const phoneEl = form.querySelector('[name=phone]'), nameEl = form.querySelector('[name=name]');
+      if (me && !phoneEl.value) phoneEl.value = me.phone || "";
+      if (me && !nameEl.value) nameEl.value = me.name || "";
+      if (WA_CUSTOMER) {
+        phoneEl.value = WA_CUSTOMER.phone;
+        phoneEl.readOnly = true;
+        phoneEl.nextElementSibling.textContent = "Your WhatsApp number. Order updates come there.";
+        if (!nameEl.value) nameEl.value = WA_CUSTOMER.name || "";
+      }
+      if (phoneEl.value) phoneEl.dispatchEvent(new Event("input"));
+    } catch (_) { /* storage unavailable */ }
+
+    // GPS location capture — centres the map and moves the pin there
+    const gpsBtn = overlay.querySelector("#gps-btn");
+    const gpsStatus = overlay.querySelector("#gps-status");
+    gpsBtn.addEventListener("click", () => {
+      if (!navigator.geolocation) { gpsStatus.textContent = "Not supported"; return; }
+      gpsBtn.disabled = true;
+      gpsStatus.textContent = "Getting location...";
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          movePin(pos.coords.latitude, pos.coords.longitude);
+          gpsStatus.textContent = "✓ Location captured";
+          gpsStatus.style.color = "#16a34a";
+          gpsBtn.textContent = "📍 Location saved";
+        },
+        (err) => {
+          gpsStatus.textContent = err.code === 1 ? "Permission denied" : "Could not get location";
+          gpsStatus.style.color = "#B3261E";
+          gpsBtn.disabled = false;
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    });
+
+    // ---- Step navigation: 1 When -> 2 Address (delivery only) -> 3 Review ----
+    const stepEls = [...overlay.querySelectorAll(".co-step")];
+    const backBtn = overlay.querySelector("#co-back");
+    const segs = [...overlay.querySelectorAll("#co-progress span")];
+    const isDeliveryNow = () => typeSelect.value === "delivery";
+    function checkOutside() {
+      const card = overlay.querySelector("#outside-card");
+      if (!card || !isDeliveryNow()) return false;
+      const sub = Object.keys(cart).reduce((t, id) => t + (PRICES[id] || 0) * cart[id], 0);
+      const q = quoteDelivery(sub);
+      const out = !!(q && q.outside);
+      card.hidden = !out;
+      if (out) overlay.querySelector("#outside-k").textContent = q.km.toFixed(1) + " KM AWAY";
+      return out;
+    }
+    overlay.querySelector("#pin-move").addEventListener("click", () => { overlay.querySelector("#pin-check").hidden = true; overlay.querySelector("#map-pin").scrollIntoView({ behavior: "smooth", block: "center" }); });
+    overlay.querySelector("#pin-ok").addEventListener("click", () => { overlay.querySelector("#pin-check").hidden = true; anchor = null; });
+    overlay.querySelector("#outside-pickup").addEventListener("click", () => { overlay.querySelector('#order-type-tiles [data-value="pickup"]').click(); overlay.querySelector("#outside-card").hidden = true; showStep(3); });
+    overlay.querySelector("#outside-retry").addEventListener("click", () => { overlay.querySelector("#outside-card").hidden = true; const a = form.querySelector("[name=address]"); a.value = ""; a.focus(); });
+    function validateStep(n) {
+      const sec = stepEls[n - 1];
+      if (n === 2 && GOOGLE_MAPS_API_KEY && !inputLat.value) {
+        const m = overlay.querySelector("#checkout-msg");
+        m.style.color = "#B3261E";
+        m.textContent = "Pick your address from the suggestions, or tap Use my location, then drag the pin onto your door.";
+        return false;
+      }
+      if (n === 2) {
+        if (checkOutside()) return false;
+        if (!overlay.querySelector("#pin-check").hidden) { overlay.querySelector("#pin-check").scrollIntoView({ behavior: "smooth", block: "center" }); return false; }
+      }
+      for (const el of sec.querySelectorAll("input, textarea, select")) {
+        if (el.type === "hidden" || el.disabled || !el.offsetParent) continue;
+        if (!el.checkValidity()) { el.reportValidity(); return false; }
+      }
+      return true;
+    }
+    function showStep(n) {
+      coStep = n;
+      stepEls.forEach((el, i) => { el.hidden = (i + 1) !== n; });
+      segs.forEach((sp, i) => sp.classList.toggle("on", i < n));
+      backBtn.style.visibility = n > 1 ? "visible" : "hidden";
+      const b = overlay.querySelector("#place-btn");
+      b.textContent = n === 3 ? "Place order" : (n === 1 ? (isDeliveryNow() ? "Continue" : "Review order") : "Continue");
+      overlay.querySelector("#co-total").hidden = n !== 3;
+      overlay.querySelector("#checkout-msg").textContent = "";
+      overlay.querySelector(".co-body").scrollTop = 0;
+      if (n === 2 && gMap && window.google) { google.maps.event.trigger(gMap, "resize"); if (gMarker) gMap.setCenter(gMarker.getPosition()); }
+      refreshCheckoutSummary();
+    }
+    function goNext() {
+      if (!validateStep(coStep)) return;
+      if (coStep === 1) showStep(isDeliveryNow() ? 2 : 3);
+      else if (coStep === 2) showStep(3);
+    }
+    backBtn.addEventListener("click", () => {
+      if (coStep === 3) showStep(isDeliveryNow() ? 2 : 1);
+      else if (coStep === 2) showStep(1);
+    });
+    typeSelect.addEventListener("change", () => {
+      const b = overlay.querySelector("#place-btn");
+      if (coStep === 1) b.textContent = isDeliveryNow() ? "Continue" : "Review order";
+    });
+    showStep(1);
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (coStep !== 3) { goNext(); return; }
+      // Final submit: re-validate earlier steps, jump back to whichever is incomplete.
+      for (const n of (isDeliveryNow() ? [1, 2] : [1])) {
+        showStep(n);
+        if (!validateStep(n)) return;
+      }
+      showStep(3);
+      const msg = overlay.querySelector("#checkout-msg");
+      const btn = form.querySelector(".checkout-place");
+      const fd = new FormData(form);
+
+      // Block delivery orders that we already know can't be fulfilled — no
+      // point telling the customer the server rejected it after they typed
+      // everything. The server re-checks regardless (single source of truth).
+      if (fd.get("order_type") === "delivery") {
+        const subtotal = Object.keys(cart).reduce((s, id) => s + (PRICES[id] || 0) * cart[id], 0);
+        const q = quoteDelivery(subtotal);
+        if (q) {
+          if (q.outside) {
+            msg.style.color = "#B3261E";
+            msg.textContent = "We don't deliver that far yet. Switch to pickup and we'll have it ready for you.";
+            return;
+          }
+          if (subtotal < q.min_order) {
+            msg.style.color = "#B3261E";
+            msg.textContent = `Minimum order for ${q.zone} is ₹${q.min_order}. Add a little more to continue.`;
+            return;
+          }
+        }
+      }
+      msg.textContent = "";
+      btn.disabled = true;
+      btn.textContent = "Placing…";
+      const landmark = fd.get("landmark");
+      const address = fd.get("address")
+        ? fd.get("address") + (landmark ? ` (Landmark: ${landmark})` : "")
+        : null;
+      const payload = {
+        name: fd.get("name"),
+        phone: fd.get("phone"),
+        order_type: fd.get("order_type"),
+        address: address,
+        pincode: fd.get("pincode") || null,
+        lat: fd.get("lat") || null,
+        lng: fd.get("lng") || null,
+        payment_method: fd.get("payment_method"),
+        instructions: fd.get("instructions") || null,
+        scheduled_at: fd.get("scheduled_at") || null,
+        scheduled_window: fd.get("scheduled_window") || null,
+        pay_courier_direct: false,
+        discount_code: appliedCode ? appliedCode.code : null,
+        items: ids.map(id => {
+          const noteEl = document.querySelector(`.card-note[data-id="${id}"]`);
+          const note = noteEl ? noteEl.value.trim() : "";
+          return note ? { item_id: id, qty: cart[id], note } : { item_id: id, qty: cart[id] };
+        }),
+      };
+      try {
+        const res = await fetch("/api/orders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Order failed");
+        try { if (appliedCode) localStorage.removeItem(PROMO_KEY); } catch (_) {}
+        const placedItems = ids
+          .map(id => ({ item_id: id, name: NAMES[id], price: PRICES[id], qty: cart[id] }))
+          .filter(i => i.qty > 0);
+        Object.keys(cart).forEach(k => delete cart[k]);
+        updateCart();
+        try {
+          localStorage.removeItem(DETAILS_KEY);
+          // Remember who they are for next time (address comes back via the
+          // phone lookup, so only name + phone are kept on the device).
+          localStorage.setItem("cp_customer", JSON.stringify({ name: payload.name, phone: payload.phone }));
+        } catch (_) { /* storage unavailable */ }
+        // Device-local order history for /track's "My Orders" recovery page —
+        // just enough to look the order up live by token; that page fetches
+        // full/current details from the server rather than trusting this.
+        try {
+          const MY_ORDERS_KEY = "cp_my_orders";
+          const mine = JSON.parse(localStorage.getItem(MY_ORDERS_KEY) || "[]");
+          mine.unshift({ tracking_token: data.tracking_token, order_id: data.order_id });
+          localStorage.setItem(MY_ORDERS_KEY, JSON.stringify(mine.slice(0, 20)));
+        } catch (_) { /* storage unavailable */ }
+        document.querySelectorAll(".card-stepper .qty").forEach(el => el.textContent = "0");
+        document.querySelectorAll(".card-note").forEach(el => el.value = "");
+        const isDelivery = payload.order_type === "delivery" && payload.address;
+        const isUpi = payload.payment_method === "upi" && UPI_VPA;
+        const when = data.schedule_label
+          ? data.schedule_label
+          : payload.scheduled_at
+            ? new Date(payload.scheduled_at).toLocaleString("en-IN", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
+            : "As soon as possible";
+        const confirmLines = [
+          `Hi {{ biz.name }}, please confirm my order #${data.order_id}:`,
+          "",
+          ...placedItems.map(i => `${i.qty} × ${i.name} — ₹${Math.round(i.price * i.qty)}`),
+          "",
+          `Subtotal ₹${data.subtotal}`,
+          ...(data.discount ? [`Discount (${data.discount_code}) −₹${data.discount}`] : []),
+          ...(data.packing_fee ? [`Packing ₹${data.packing_fee}`] : []),
+          ...(data.gst_amount ? [`GST ₹${data.gst_amount}`] : []),
+          ...(data.delivery_fee ? [`Delivery ₹${data.delivery_fee}`] : []),
+          `Total: ₹${data.total}`,
+          "",
+          isDelivery ? `Deliver to: ${payload.address}` : "Pickup at {{ biz.pickup_line }}",
+          `Name: ${payload.name} · ${payload.phone}`,
+          `When: ${when}`,
+          `Payment: ${payload.payment_method === "upi" ? "UPI" : "Cash on delivery"}`,
+          ...(payload.instructions ? [`Note: ${payload.instructions}`] : []),
+          "",
+          `Your tracking reference: ${data.tracking_token}`,
+          `Track it: {{ site_url }}/track/${data.tracking_token}`,
+          "",
+          "Please confirm my delivery time and share your payment QR.",
+        ];
+        const confirmHref = "https://wa.me/{{ wa_order_number }}?text=" + encodeURIComponent(confirmLines.join("\n"));
+        overlay.querySelector(".checkout-panel").innerHTML = `
+          <div class="co-grab"></div>
+          <div class="co-top"><span></span><button type="button" class="checkout-close" id="checkout-close-2" aria-label="Close">✕</button></div>
+          <div class="co-success">
+            <div class="checkout-success-icon">✓</div>
+            <div class="co-kicker">ORDER #${data.order_id}</div>
+            <h2 class="co-title">${isUpi ? "Placed. Now pay to confirm" : "Placed. The kitchen has it"}</h2>
+            <p class="checkout-success-detail" style="margin:10px 0 0">${when} · ₹${data.total}${data.delivery_fee ? ` incl. ₹${data.delivery_fee} delivery` : ""}<br>${placedItems.map(i => i.name).join(", ")}</p>
+            <div style="align-self:stretch;margin-top:26px;display:flex;flex-direction:column;gap:10px;text-align:left">
+              <div style="padding:14px 16px;border-radius:14px;background:#fff;border:1px solid #ECE6DA;font-size:14px;line-height:1.5"><b style="font-weight:600">Updates come on WhatsApp</b><br><span style="color:var(--sub)">from {{ biz.name }}, {{ wa_order_display }}. Save the number.</span></div>
+              ${isDelivery ? `<div class="edit-window" id="edit-window" style="margin-top:0">
+                <div class="edit-window-text">Wrong address? <span id="edit-countdown">3:00</span> left to fix it.</div>
+                <button type="button" class="edit-window-btn" id="edit-address-btn">Change the address</button>
+              </div>` : ""}
+            </div>
+          </div>
+          <div class="co-footer">
+            ${isUpi
+              ? `<a class="checkout-place" id="upi-pay-now" style="text-decoration:none;display:flex;align-items:center;justify-content:center" href="/pay/${data.tracking_token}">Pay ₹${data.total} with UPI</a>`
+              : `<a class="checkout-place" style="text-decoration:none;display:flex;align-items:center;justify-content:center" href="/track/${data.tracking_token}">Track my order</a>`}
+            <div class="co-links">
+              ${isUpi ? `<a href="/track/${data.tracking_token}">Track order</a>` : ""}
+              ${WA_CUSTOMER ? `<a href="https://wa.me/{{ wa_order_number }}">Back to WhatsApp</a>` : ""}
+              <button type="button" id="checkout-continue">Keep browsing</button>
+            </div>
+            <p class="confirm-state" style="font-size:12.5px;color:var(--sub);text-align:center;margin:4px 0 0">Custom swap or a question? <a id="wa-optional" href="${confirmHref}" target="_blank" rel="noopener" style="color:var(--g);font-weight:600">Message us on WhatsApp</a>. The order is already placed.</p>
+          </div>
+        `;
+        const closeAndReset = () => overlay.remove();
+        overlay.querySelector("#checkout-close-2").addEventListener("click", closeAndReset);
+        overlay.querySelector("#checkout-continue").addEventListener("click", closeAndReset);
+
+        if (isDelivery) {
+          const editWindow = overlay.querySelector("#edit-window");
+          const countdownEl = overlay.querySelector("#edit-countdown");
+          let secondsLeft = 180;
+          const tick = () => {
+            secondsLeft--;
+            if (secondsLeft <= 0) {
+              clearInterval(timer);
+              editWindow.innerHTML = `<div class="edit-window-text">The kitchen has started cooking. Need to fix the address?</div>
+                <a class="edit-window-btn" href="https://wa.me/{{ wa_order_number }}?text=${encodeURIComponent("Hi, I need to fix the delivery address for order #" + data.order_id)}" target="_blank">Message us on WhatsApp</a>`;
+              return;
+            }
+            countdownEl.textContent = Math.floor(secondsLeft / 60) + ":" + String(secondsLeft % 60).padStart(2, "0");
+          };
+          const timer = setInterval(tick, 1000);
+
+          overlay.querySelector("#edit-address-btn").addEventListener("click", () => {
+            editWindow.innerHTML = `
+              <div class="edit-window-text">New address</div>
+              <form class="edit-window-form" id="edit-address-form">
+                <textarea name="address" rows="2" required>${payload.address.replace(/ \(Landmark:.*\)$/, "")}</textarea>
+                <input name="landmark" placeholder="Nearest landmark" value="${landmark || ""}">
+                <button type="submit" class="edit-window-btn">Save new address</button>
+                <div class="checkout-msg" id="edit-address-msg"></div>
+              </form>
+            `;
+            overlay.querySelector("#edit-address-form").addEventListener("submit", async (ev) => {
+              ev.preventDefault();
+              const efd = new FormData(ev.target);
+              const newLandmark = efd.get("landmark");
+              const newAddress = efd.get("address") + (newLandmark ? ` (Landmark: ${newLandmark})` : "");
+              const emsg = overlay.querySelector("#edit-address-msg");
+              try {
+                const eres = await fetch(`/api/orders/${data.order_id}/address`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ address: newAddress, pincode: payload.pincode, lat: null, lng: null }),
+                });
+                const edata = await eres.json();
+                if (!eres.ok) throw new Error(edata.detail || "Could not update address");
+                clearInterval(timer);
+                editWindow.innerHTML = `<div class="edit-window-text">✓ Address updated.</div>`;
+              } catch (err) {
+                emsg.style.color = "#B3261E";
+                emsg.textContent = err.message;
+              }
+            });
+          });
+        }
+      } catch (err) {
+        btn.disabled = false;
+        refreshCheckoutSummary();
+        if (err instanceof TypeError) {
+          // fetch() itself failed: no connection. Nothing was lost; offer a retry.
+          msg.innerHTML = '<div class="err-toast"><div>Couldn\'t reach the kitchen.<br><span>Your cart and address are saved.</span></div><button type="button" id="retry-place">Retry</button></div>';
+          msg.querySelector("#retry-place").addEventListener("click", () => form.requestSubmit());
+        } else {
+          msg.style.color = "#B3261E";
+          msg.textContent = err.message;
+        }
+      }
+    });
+  }
+  if (location.hash === "#checkout" && Object.keys(cart).some(id => (cart[id] || 0) > 0)) {
+    const cc = document.getElementById("cart-checkout");
+    if (cc) cc.click();
+  }
+})();
+</script>
+
+<script type="application/ld+json">{{ menu_schema | tojson }}</script>
+{% endblock %}

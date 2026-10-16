@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block meta %}
+<meta name="description" content="Order direct from {{ biz.name }}: no aggregator commission, straight to the kitchen.">
+<title>{{ biz.name }} · Order direct</title>
+{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ site_url }}/">{% endblock %}
+{% block body %}
+<main class="page" style="max-width:900px;margin:0 auto;padding:40px 18px;">
+  <h1>{{ biz.name }}</h1>
+  <p class="page-sub">Order directly from the kitchen. {{ biz.hours }}.</p>
+  <p><a class="btn" href="/menu">See the menu</a> · <a href="/how-to-order">How to order</a> · <a href="/delivery">Delivery</a></p>
+  {% if picks %}
+  <h2>Popular</h2>
+  <ul>{% for p in picks %}<li><a href="/menu/{{ p.id }}">{{ p.name }}</a> · ₹{{ p.price }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if faqs %}
+  <h2>Questions</h2>
+  {% for f in faqs %}<details><summary>{{ f.q }}</summary><p>{{ f.a }}</p></details>{% endfor %}
+  {% endif %}
+</main>
+{% endblock %}

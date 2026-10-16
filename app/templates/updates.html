@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block meta %}
+<meta name="description" content="News and announcements from {{ biz.name }}.">
+<title>Updates | {{ biz.name }}</title>
+{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ site_url }}/updates">{% endblock %}
+{% block body %}
+<main class="page" style="max-width:760px;margin:0 auto;padding:40px 18px;">
+  <h1>Updates</h1>
+  {% for u in updates %}
+  <article><h2>{{ u.title }}</h2><p>{{ u.text or u.body or "" }}</p></article>
+  {% else %}<p>Nothing yet.</p>{% endfor %}
+</main>
+{% endblock %}

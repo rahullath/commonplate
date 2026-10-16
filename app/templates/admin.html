@@ -1,0 +1,349 @@
+{% extends "base.html" %}
+{% block meta %}
+<meta name="robots" content="noindex, nofollow">
+<title>Admin | {{ biz.name }}</title>
+{% endblock %}
+{% block body %}
+<div id="admin-app">
+  <header class="ah">
+    <div class="ah-top">
+      <div>
+        <div class="ah-title">Today</div>
+        <div class="ah-sub" id="day-summary">Loading…</div>
+      </div>
+      <img src="/static/logo.png" alt="" class="ah-logo">
+    </div>
+    <div class="ah-chips" id="filter-chips">
+      <span class="ah-chip active" data-filter="live">Live</span>
+      <span class="ah-chip" data-filter="scheduled">Scheduled</span>
+      <span class="ah-chip" data-filter="done">Done</span>
+      <span class="ah-chip" data-filter="all">All</span>
+    </div>
+  </header>
+
+  <!-- Orders Tab -->
+  <div class="tab-content active" id="tab-orders">
+    <div id="orders-list" class="orders-list"></div>
+    <p id="orders-empty" class="empty-msg" hidden>No orders yet today.</p>
+  </div>
+
+  <!-- Menu Tab -->
+  <div class="tab-content" id="tab-menu">
+    <div class="menu-header">
+      <div>
+        <div class="menu-title">Today's menu</div>
+        <div class="menu-sub" id="menu-count">Loading…</div>
+      </div>
+      <div class="menu-actions">
+        <button id="repeat-yesterday" class="menu-btn primary">Repeat yesterday</button>
+        <button id="all-on" class="menu-btn">All on</button>
+      </div>
+    </div>
+
+    <div class="special-card">
+      <div class="special-header">
+        <span class="special-title">Today's special</span>
+        <button id="add-special" class="special-add">Add</button>
+      </div>
+      <div id="special-display" class="special-display">
+        <span class="special-empty">No special set</span>
+      </div>
+    </div>
+
+    <div id="menu-groups">
+      {% for g in groups %}
+      <div class="menu-group">
+        <div class="group-header">
+          <span class="group-name">{{ g["group"] }}</span>
+          <span class="group-count">{{ g["items"]|length }} items</span>
+        </div>
+        {% for it in g["items"] %}
+        <div class="menu-item{% if not it.available %} off{% endif %}">
+          <label class="toggle">
+            <input type="checkbox" class="avail-check" data-id="{{ it.id }}" {% if it.available %}checked{% endif %}>
+            <span class="slider"></span>
+          </label>
+          <span class="item-name">{{ it.name }}</span>
+          {% if it.available %}
+          <span class="item-price">₹{{ it.price }}</span>
+          {% else %}
+          <span class="item-sold-out">SOLD OUT</span>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="catalog-card">
+      <div class="catalog-header">
+        <span class="catalog-title">WhatsApp catalog</span>
+        <span class="catalog-badge">140 products</span>
+      </div>
+      <div class="catalog-info">Hourly feed from menu. Sold-out items go out of stock in catalog.</div>
+    </div>
+
+    <div class="wa-commands-card">
+      <div class="wa-commands-title">By WhatsApp</div>
+      <div class="wa-commands-info">Message the bot from your own number:</div>
+      <div class="wa-commands-code">dal sold out<br>chola bhatura back<br>special mango lassi 89</div>
+    </div>
+  </div>
+
+  <!-- Chats Tab -->
+  <div class="tab-content" id="tab-chats">
+    <div class="chats-header">
+      <div>
+        <div class="chats-title">Chats</div>
+        <div class="chats-sub">Bot answers unless you take over</div>
+      </div>
+    </div>
+    <div id="convos-list"></div>
+    <p id="convos-empty" class="empty-msg" hidden>No conversations yet.</p>
+
+    <div class="quick-replies-card">
+      <div class="qr-title">Quick replies</div>
+      <div class="qr-list">
+        <span class="qr-chip">आ रहा है, 20 मिनट</span>
+        <span class="qr-chip">Today no paneer</span>
+        <span class="qr-chip">Call you back</span>
+        <span class="qr-chip">Give back to bot</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Day Tab -->
+  <div class="tab-content" id="tab-day">
+    <div class="day-card">
+      <div class="day-title">Day summary</div>
+      <div id="day-stats" class="day-stats">Loading…</div>
+    </div>
+  </div>
+
+  <!-- Reviews Tab -->
+  <div class="tab-content" id="tab-reviews">
+    <div class="menu-header">
+      <div>
+        <div class="menu-title">Reviews</div>
+        <div class="menu-sub">Add real quotes as you collect them — nothing invented</div>
+      </div>
+    </div>
+
+    <div class="special-card">
+      <div class="special-header"><span class="special-title">Add a review</span></div>
+      <form id="review-form" style="margin-top:10px; display:flex; flex-direction:column; gap:10px;">
+        <select name="source" required style="padding:9px; border:1px solid var(--border); border-radius:8px; font-size:14px;">
+          <option value="google">Google</option>
+          <option value="instagram">Instagram</option>
+          <option value="facebook">Facebook</option>
+          <option value="whatsapp">WhatsApp</option>
+          <option value="in_person">Physical / in-person (sticker, note)</option>
+        </select>
+        <input name="author_name" placeholder="First name (optional)" style="padding:9px; border:1px solid var(--border); border-radius:8px; font-size:14px;">
+        <textarea name="quote" rows="2" required placeholder="The actual quote" style="padding:9px; border:1px solid var(--border); border-radius:8px; font-size:14px;"></textarea>
+        <div style="display:flex; gap:8px;">
+          <select name="rating" style="flex:1; padding:9px; border:1px solid var(--border); border-radius:8px; font-size:14px;">
+            <option value="">No rating shown</option>
+            <option value="5">5 stars</option>
+            <option value="4">4 stars</option>
+            <option value="3">3 stars</option>
+            <option value="2">2 stars</option>
+            <option value="1">1 star</option>
+          </select>
+          <input name="proof_url" placeholder="Link/screenshot (optional)" style="flex:2; padding:9px; border:1px solid var(--border); border-radius:8px; font-size:14px;">
+        </div>
+        <button type="submit" class="menu-btn primary" style="align-self:flex-start;">Add review</button>
+      </form>
+    </div>
+
+    <div id="reviews-list"></div>
+    <p id="reviews-empty" class="empty-msg" hidden>No reviews yet.</p>
+
+    <div class="special-card">
+      <div class="special-header"><span class="special-title">Platform numbers</span></div>
+      <p class="catalog-info" style="margin-top:4px;">Google refreshes itself once a day if a Places API key is configured.</p>
+      <form id="platform-stats-form" style="margin-top:10px; display:flex; flex-direction:column; gap:10px;">
+        <button type="submit" class="menu-btn primary" style="align-self:flex-start;">Save numbers</button>
+      </form>
+      <div id="google-stats-display" class="catalog-info" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="special-card">
+      <div class="special-header"><span class="special-title">Order count on the website</span></div>
+      <p class="catalog-info" style="margin-top:4px;">The app only counts orders placed through the website. Set your own honest round estimate instead; it's shown on /about formatted like "85k+", not as an exact number, so it never needs precise upkeep.</p>
+      <form id="order-count-form" style="margin-top:10px; display:flex; gap:8px;">
+        <input name="order_count" type="number" min="0" placeholder="e.g. 85000" style="flex:1; padding:8px; border:1px solid var(--border); border-radius:8px; font-size:14px;">
+        <button type="submit" class="menu-btn primary">Save</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Bottom Tab Bar -->
+  <nav class="tab-bar">
+    <div class="tab active" data-tab="orders"><div class="tab-icon">▤</div>Orders</div>
+    <div class="tab" data-tab="menu"><div class="tab-icon">☰</div>Menu</div>
+    <div class="tab" data-tab="chats"><div class="tab-icon">✆</div>Chats</div>
+    <div class="tab" data-tab="day"><div class="tab-icon">₹</div>Day</div>
+    <div class="tab" data-tab="reviews"><div class="tab-icon">★</div>Reviews</div>
+  </nav>
+</div>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+:root {
+  --g: #0E7A45; --g2: #6FBF3F; --sf: #E08A1E;
+  --bg: #F6F3EC; --card: #fff; --border: #E7E1D6; --ink: #171A14;
+  --sub: #6F7468; --muted: #8A8C83;
+}
+* { box-sizing: border-box; margin: 0; }
+body { font-family: 'IBM Plex Sans', system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+
+#admin-app { max-width: 480px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; }
+
+/* Header */
+.ah { background: var(--g); color: #fff; padding: 18px 20px 14px; }
+.ah-top { display: flex; justify-content: space-between; align-items: center; }
+.ah-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 24px; }
+.ah-sub { font-size: 12px; opacity: .85; margin-top: 2px; }
+.ah-logo { width: 38px; height: 38px; background: #fff; border-radius: 50%; padding: 4px; object-fit: contain; }
+.ah-chips { display: flex; gap: 8px; margin-top: 14px; }
+.ah-chip { background: rgba(255,255,255,.16); border-radius: 999px; padding: 7px 13px; font-size: 13px; cursor: pointer; border: none; color: #fff; }
+.ah-chip.active { background: #fff; color: var(--g); font-weight: 600; }
+
+/* Tabs */
+.tab-content { display: none; flex: 1; padding: 14px; padding-bottom: 80px; }
+.tab-content.active { display: block; }
+.tab-bar { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; background: #fff; border-top: 1px solid var(--border); display: flex; padding: 8px 8px 16px; z-index: 20; }
+.tab { flex: 1; text-align: center; font-size: 11px; color: var(--sub); cursor: pointer; padding: 4px 0; }
+.tab.active { color: var(--g); font-weight: 600; }
+.tab-icon { font-size: 17px; margin-bottom: 2px; }
+
+/* Orders */
+.orders-list { display: flex; flex-direction: column; gap: 12px; }
+.order-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+.order-top { padding: 13px 15px; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.order-info .order-name { font-size: 16px; font-weight: 600; }
+.order-meta { font-size: 12px; color: var(--sub); margin-top: 3px; }
+.order-badge { font: 500 11px/1 'IBM Plex Mono', monospace; border-radius: 999px; padding: 6px 9px; white-space: nowrap; flex: 0 0 auto; }
+.badge-new { color: #8A5A12; background: #FBF0DE; }
+.badge-cooking { color: var(--g); background: #E4F0E6; }
+.badge-ready { color: #3F5B1F; background: #EDF6E2; }
+.badge-done { color: var(--sub); background: #F1EEE7; }
+.badge-cancelled { color: #B3261E; background: #FDEAEA; }
+.order-items { padding: 0 15px 12px; font-size: 13px; line-height: 1.6; color: #4A4F45; }
+.order-breakdown { padding: 0 15px 12px; font-size: 11px; color: var(--sub); }
+.order-notes { color: var(--sub); font-style: italic; }
+.order-quick { padding: 0 15px 12px; display: flex; gap: 7px; }
+.quick-btn { flex: 1; text-align: center; background: #E4F0E6; color: var(--g); border-radius: 9px; padding: 10px 6px; font-size: 13px; font-weight: 600; text-decoration: none; }
+.quick-btn-muted { background: #F1EEE7; color: var(--sub); }
+.order-flag { margin: 0 15px 12px; background: #FDEAEA; border: 1px solid #F2D6D2; border-radius: 11px; padding: 11px 13px; }
+.order-flag-title { font-size: 13px; font-weight: 600; color: #8B1F17; }
+.order-flag-reason { font-size: 12px; color: #8B1F17; opacity: .9; margin-top: 3px; line-height: 1.5; }
+.order-flag-action { margin-top: 10px; display: inline-block; background: #fff; border: 1px solid #F2D6D2; border-radius: 9px; padding: 9px 12px; font-size: 13px; font-weight: 600; color: #8B1F17; text-decoration: none; }
+.order-progress { padding: 0 15px 12px; display: flex; gap: 6px; }
+.progress-bar { height: 4px; flex: 1; border-radius: 2px; background: var(--border); }
+.progress-bar.filled { background: var(--g); }
+.order-dispatch { margin: 0 15px 14px; border: 1px dashed var(--border); border-radius: 12px; padding: 11px 13px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+.dispatch-label { color: #4A4F45; }
+.dispatch-action { color: var(--g); font-weight: 600; cursor: pointer; }
+.order-actions { padding: 0 15px 14px; display: flex; align-items: center; gap: 10px; }
+.action-primary { flex: 1; background: var(--g); color: #fff; border: none; border-radius: 12px; padding: 14px; text-align: center; font-size: 15px; font-weight: 600; cursor: pointer; }
+.action-secondary { width: 48px; height: 48px; border: 1px solid var(--border); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; color: var(--sub); cursor: pointer; background: var(--card); }
+.order-card.dimmed { opacity: .72; }
+.order-card.dimmed .order-top { padding: 13px 15px; }
+.empty-msg { text-align: center; color: var(--sub); font-size: 14px; padding: 40px 20px; }
+
+/* Menu */
+.menu-header { background: var(--g); color: #fff; padding: 18px 20px; border-radius: 16px; margin-bottom: 12px; }
+.menu-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 20px; }
+.menu-sub { font-size: 12px; opacity: .85; margin-top: 2px; }
+.menu-actions { display: flex; gap: 8px; margin-top: 14px; }
+.menu-btn { background: rgba(255,255,255,.16); color: #fff; border: none; border-radius: 999px; padding: 8px 13px; font-size: 13px; cursor: pointer; }
+.menu-btn.primary { background: #fff; color: var(--g); font-weight: 600; }
+
+.special-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 14px 15px; margin-bottom: 12px; }
+.special-header { display: flex; justify-content: space-between; align-items: center; }
+.special-title { font-size: 15px; font-weight: 600; }
+.special-add { font-size: 13px; color: var(--g); font-weight: 600; background: none; border: none; cursor: pointer; }
+.special-display { margin-top: 10px; border: 1px dashed var(--border); border-radius: 12px; padding: 12px 13px; display: flex; justify-content: space-between; font-size: 14px; }
+.special-empty { color: var(--muted); }
+
+.menu-group { background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; margin-bottom: 12px; }
+.group-header { padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #EFEBE3; }
+.group-name { font-size: 15px; font-weight: 600; }
+.group-count { font: 500 11px/1 'IBM Plex Mono', monospace; color: var(--sub); }
+.menu-item { display: flex; align-items: center; gap: 12px; padding: 11px 15px; border-bottom: 1px solid #F3F0EA; }
+.menu-item:last-child { border-bottom: none; }
+.menu-item.off { opacity: .55; }
+.toggle { position: relative; display: inline-block; width: 50px; height: 30px; flex: 0 0 auto; cursor: pointer; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle .slider { position: absolute; inset: 0; background: #CFCABE; border-radius: 999px; transition: .2s; }
+.toggle .slider:before { content: ""; position: absolute; height: 24px; width: 24px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; }
+.toggle input:checked + .slider { background: var(--g); }
+.toggle input:checked + .slider:before { transform: translateX(20px); }
+.item-name { flex: 1; font-size: 15px; }
+.item-price { font-size: 14px; color: #4A4F45; }
+.item-sold-out { font: 500 11px/1 'IBM Plex Mono', monospace; color: #B3261E; }
+
+.catalog-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 14px 15px; margin-bottom: 12px; }
+.catalog-header { display: flex; justify-content: space-between; align-items: center; }
+.catalog-title { font-size: 15px; font-weight: 600; }
+.catalog-badge { font: 500 11px/1 'IBM Plex Mono', monospace; color: var(--g); background: #E4F0E6; border-radius: 999px; padding: 6px 9px; }
+.catalog-info { font-size: 13px; color: var(--sub); margin-top: 8px; line-height: 1.55; }
+
+.wa-commands-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 14px 15px; margin-bottom: 12px; }
+.wa-commands-title { font-size: 15px; font-weight: 600; }
+.wa-commands-info { font-size: 13px; color: var(--sub); margin-top: 6px; line-height: 1.55; }
+.wa-commands-code { margin-top: 10px; background: #F1EEE7; border-radius: 12px; padding: 11px 13px; font: 400 13px/1.6 'IBM Plex Mono', monospace; color: #4A4F45; }
+
+/* Chats */
+.chats-header { background: var(--g); color: #fff; padding: 18px 20px; border-radius: 16px; margin-bottom: 12px; }
+.chats-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 20px; }
+.chats-sub { font-size: 12px; opacity: .85; margin-top: 2px; }
+
+.convo-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 13px 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.convo-info { flex: 1; }
+.convo-name { font-size: 15px; font-weight: 600; }
+.convo-detail { font-size: 12px; color: var(--sub); margin-top: 3px; }
+.convo-toggle { border-radius: 999px; padding: 8px 14px; font-size: 13px; font-weight: 600; border: 1px solid var(--border); cursor: pointer; background: var(--card); color: var(--g); }
+.convo-toggle.human { background: var(--sf); color: #fff; border-color: var(--sf); }
+
+.quick-replies-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 14px 15px; margin-top: 12px; }
+.qr-title { font-size: 15px; font-weight: 600; }
+.qr-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 11px; }
+.qr-chip { border: 1px solid var(--border); border-radius: 999px; padding: 9px 13px; font-size: 13px; cursor: pointer; }
+.qr-chip:hover { background: #F1EEE7; }
+
+/* Day */
+.day-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 14px 15px; }
+.day-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+.day-stats { font-size: 14px; color: var(--sub); line-height: 1.8; }
+.day-stat-val { color: var(--ink); font-weight: 600; }
+
+/* Reviews */
+.review-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 13px 15px; margin-bottom: 10px; }
+.review-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.review-source { font: 500 11px/1 'IBM Plex Mono', monospace; color: var(--g); text-transform: uppercase; letter-spacing: .04em; }
+.review-quote { font-size: 14px; margin-top: 6px; line-height: 1.5; }
+.review-meta { font-size: 12px; color: var(--sub); margin-top: 4px; }
+.review-actions { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+.review-delete { color: #B3261E; font-size: 13px; cursor: pointer; background: none; border: none; }
+
+/* Toast */
+.porter-sheet { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; justify-content: center; z-index: 40; }
+.porter-card { background: #fff; width: 100%; max-width: 520px; max-height: 92dvh; overflow-y: auto; border-radius: 16px 16px 0 0; padding: 18px 16px 22px; }
+.porter-title { font-weight: 700; font-size: 16px; margin-bottom: 10px; }
+.porter-text { white-space: pre-wrap; word-break: break-word; font: 12.5px/1.5 ui-monospace, monospace; background: #F6F3EC; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin: 0 0 12px; user-select: all; }
+.porter-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+.porter-btn { flex: 1; min-width: 110px; text-align: center; background: var(--g); color: #fff; border: none; border-radius: 10px; padding: 11px 12px; font-size: 14px; font-weight: 600; text-decoration: none; cursor: pointer; }
+.porter-btn.ghost { background: #fff; color: var(--g); border: 1px solid var(--border); }
+.porter-btn:disabled { opacity: .6; }
+.porter-label { display: block; font-size: 12px; color: #4A4F45; margin-top: 10px; }
+.porter-label input { display: block; width: 100%; margin-top: 4px; padding: 10px 12px; font-size: 15px; border: 1px solid var(--border); border-radius: 10px; box-sizing: border-box; }
+.toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 999px; font-size: 13px; z-index: 30; animation: fadeUp .3s ease; }
+@keyframes fadeUp { from { opacity: 0; transform: translateX(-50%) translateY(8px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+</style>
+
+<script src="/static/admin.js"></script>
+{% endblock %}

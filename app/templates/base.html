@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% block meta %}
+  <meta name="description" content="{{ biz.name }} — {{ biz.tagline }}. Order online for delivery or pickup, no platform fees.">
+  <title>{{ biz.name }}</title>
+  {% endblock %}
+  {% block canonical %}{% endblock %}
+  <link rel="icon" type="image/png" href="/static/logo.png">
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="theme-color" content="#0E7A45">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="{{ biz.name }}">
+  <!-- Google tag (gtag.js) -->
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    
+  </script>
+  {% block fonts %}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  {% endblock %}
+  {% block styles %}
+  <link rel="stylesheet" href="/static/style.css">
+  {% endblock %}
+</head>
+<body>
+  {% include "_nav.html" %}
+  {% block body %}{% endblock %}
+  {% include "_footer.html" %}
+
+  {% block cartbar %}
+  <a class="cartbar" id="cartbar" href="/menu#checkout" hidden>
+    <span class="cartbar-count" id="cartbar-count">0</span>
+    <span class="cartbar-label">View cart</span>
+    <span class="cartbar-total" id="cartbar-total">₹0</span>
+  </a>
+  <style>
+  .cartbar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 80; display: flex; align-items: center; gap: 12px; background: var(--g, #0E7A45); color: #fff; border-radius: 999px; padding: 12px 8px 12px 16px; box-shadow: 0 8px 24px rgba(14, 122, 69, .35); text-decoration: none; font: 600 14px 'IBM Plex Sans', system-ui, sans-serif; }
+  /* display:flex above overrides the hidden attribute: without this the
+     pill showed "View cart ₹0" on every page and covered /menu's checkout. */
+  .cartbar[hidden] { display: none; }
+  .cartbar-count { background: rgba(255,255,255,.22); border-radius: 999px; min-width: 22px; height: 22px; line-height: 22px; text-align: center; padding: 0 6px; font-size: 12px; }
+  .cartbar-label { white-space: nowrap; }
+  .cartbar-total { font: 600 13px 'IBM Plex Mono', monospace; background: #fff; color: var(--g, #0E7A45); border-radius: 999px; padding: 8px 14px; }
+  @media (max-width: 768px) {
+    .cartbar { max-width: calc(100vw - 24px); gap: 8px; bottom: 12px; }
+  }
+  </style>
+  <script>
+  (function () {
+    var bar = document.getElementById('cartbar');
+    if (!bar) return;
+    if (location.pathname === '/menu') return;
+    var KEY = 'cp_menu_cart';
+    var PRICES = null;
+    var totalEl = document.getElementById('cartbar-total');
+    var countEl = document.getElementById('cartbar-count');
+    fetch('/api/menu').then(function (r) { return r.json(); }).then(function (data) {
+      PRICES = {};
+      (data.groups || []).forEach(function (g) {
+        (g.items || []).forEach(function (it) {
+          if (it.price != null) PRICES[String(it.id).split('__')[0]] = Number(it.price);
+        });
+      });
+      tick();
+    }).catch(function (_) { PRICES = {}; });
+    function tick() {
+      var cart = {};
+      try { cart = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (_) {}
+      var ids = Object.keys(cart).filter(function (k) { return cart[k] > 0; });
+      var count = 0, total = 0;
+      ids.forEach(function (k) {
+        count += cart[k];
+        total += cart[k] * (PRICES ? (PRICES[k] || 0) : 0);
+      });
+      if (count > 0) {
+        bar.hidden = false;
+        countEl.textContent = count;
+        totalEl.textContent = PRICES ? '₹' + total : '₹' + total;
+      } else {
+        bar.hidden = true;
+      }
+    }
+    tick();
+    setInterval(tick, 800);
+  })();
+  </script>
+  {% endblock %}
+
+  {# Ordering pages hide it: mid-order it bounced people to WhatsApp and back. #}
+  {% if not hide_nav and not hide_wa %}
+  <a class="site-wa" href="{{ wa_order_link("Hi") }}" target="_blank" rel="noopener" aria-label="Message us on WhatsApp">
+    <svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.29-1.39a9.9 9.9 0 0 0 4.75 1.21h.01c5.46 0 9.91-4.45 9.91-9.91S17.5 2 12.04 2zm0 18.14h-.01a8.2 8.2 0 0 1-4.19-1.15l-.3-.18-3.14.82.84-3.06-.2-.31a8.2 8.2 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.26-8.24 2.21 0 4.28.86 5.84 2.42a8.2 8.2 0 0 1 2.41 5.83c0 4.55-3.7 8.25-8.25 8.25zm4.52-6.17c-.25-.12-1.47-.72-1.7-.81-.23-.08-.39-.12-.56.13-.16.24-.64.8-.78.97-.14.16-.29.18-.53.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.24-1.47-1.39-1.72-.14-.24-.02-.38.11-.5.11-.11.25-.29.37-.43.12-.15.16-.25.24-.41.08-.16.04-.31-.02-.43-.06-.12-.56-1.35-.77-1.85-.2-.48-.41-.42-.56-.43-.14-.01-.31-.01-.47-.01a.9.9 0 0 0-.65.31c-.23.24-.86.85-.86 2.06 0 1.22.88 2.4 1 2.56.12.16 1.73 2.64 4.19 3.7.59.25 1.04.4 1.4.52.59.19 1.12.16 1.54.1.47-.07 1.47-.6 1.67-1.18.21-.58.21-1.08.14-1.18-.06-.11-.22-.17-.47-.29z"/></svg>
+  </a>
+  <style>
+  .site-wa { position: fixed; right: 18px; bottom: 18px; z-index: 40; width: 56px; height: 56px; border-radius: 50%; background: #0E7A45; color: #fff; display: flex; align-items: center; justify-content: center; text-decoration: none; box-shadow: 0 6px 20px rgba(14,122,69,.35); }
+  @media (min-width: 769px) { .site-wa { display: none; } }
+  </style>
+  {% endif %}
+  <script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/sw.js').catch(function () { /* installability is a bonus, not a blocker */ });
+    });
+  }
+  </script>
+</body>
+</html>

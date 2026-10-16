@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block meta %}
+<meta name="description" content="That page doesn't exist — but your order is safe. Head back to the {{ biz.name }} menu, or track an order you already placed.">
+<title>Page Not Found | {{ biz.name }}</title>
+{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ site_url }}/404">{% endblock %}
+{% block fonts %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+{% endblock %}
+{% block styles %}{% endblock %}
+{% block body %}
+<style>
+:root { --g: #0E7A45; --sf: #E08A1E; --bg: #FBF8F2; --card: #fff; --border: #E7E1D6; --ink: #171A14; --sub: #6F7468; --line2: #EFEBE3; }
+* { box-sizing: border-box; margin: 0; }
+body { font-family: 'IBM Plex Sans', system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+
+.page { max-width: 720px; margin: 0 auto; padding: 72px 40px 60px; text-align: center; }
+.code { font-family: 'Bricolage Grotesque', sans-serif; font-size: clamp(90px, 14vw, 150px); line-height: 1; color: var(--line2); }
+.page-tag { font: 500 12px/1 'IBM Plex Mono', monospace; color: var(--sf); letter-spacing: .08em; margin-top: -20px; }
+.page h1 { font-family: 'Bricolage Grotesque', sans-serif; font-size: clamp(26px, 3.4vw, 34px); margin: 20px 0 0; line-height: 1.1; }
+.page p { margin: 14px auto 0; font-size: 15.5px; line-height: 1.7; color: #43483F; max-width: 460px; }
+
+.links { margin-top: 34px; display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; }
+.links a { background: var(--card); color: var(--g); border: 1px solid var(--border); border-radius: 12px; padding: 14px 22px; font-size: 15px; font-weight: 600; text-decoration: none; }
+.links a.primary { background: var(--g); color: #fff; border-color: var(--g); }
+
+.popular { margin-top: 44px; text-align: left; }
+.popular h2 { font-family: 'Bricolage Grotesque', sans-serif; font-size: 18px; margin-bottom: 14px; }
+.sib-links { display: flex; flex-wrap: wrap; gap: 10px; }
+.sib-links a { font: 500 12px/1 'IBM Plex Mono', monospace; color: var(--g); background: var(--card); border: 1px solid var(--border); border-radius: 999px; padding: 10px 16px; text-decoration: none; }
+.sib-links a:hover { border-color: var(--g); }
+
+@media (max-width: 768px) {
+  .page { padding: 56px 18px 48px; }
+}
+</style>
+
+<div class="page">
+  <div class="code">404</div>
+  <div class="page-tag">Page not found</div>
+  <h1>Looks like this dish fell off the menu.</h1>
+  <p>The page you're looking for doesn't exist — but your order is safe. Head back to the menu, or if you came from a tracking link, use your reference on the tracking page.</p>
+  <div class="links">
+    <a class="primary" href="/menu">See today's menu</a>
+    <a href="/track">Track an order</a>
+    <a href="/">Back to home</a>
+  </div>
+
+  <div class="popular">
+    <h2>The kitchen's favourites if you're still hungry</h2>
+    <div class="sib-links">
+      {% for c in categories %}
+      <a href="/category/{{ c.slug }}">{{ c.name }}</a>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

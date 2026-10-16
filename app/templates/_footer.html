@@ -1,0 +1,63 @@
+{# Shared site footer — included by base.html on every public page (kitchen/admin
+   set hide_nav, which hides nav + footer chrome). Self-contained CSS lives
+   here because most pages skip style.css. Content is the union of what the
+   per-template footers carried: address/hours, category links, full link set,
+   and the also-known-as / also-on entity line. #}
+{% if not hide_nav %}
+<footer class="footer">
+  <div class="footer-in">
+    <div class="f-brand"><img src="/static/logo.png" alt=""><span>{{ biz.name }}</span></div>
+    <p class="f-meta">{{ biz.address }}<br>Mon–Sat 9 AM–9 PM · Sun 11 AM–9 PM</p>
+    <div class="f-contact">
+      <a href="tel:{{ biz.phone_e164 }}">{{ biz.phone_display }}</a>
+      <a href="{{ wa_order_link('Hi') }}" rel="noopener">WhatsApp {{ wa_order_display }}</a>
+    </div>
+    <nav class="f-links" aria-label="Footer">
+      <a href="/menu">Menu</a><a href="/how-to-order">How to order</a>
+      <a href="/delivery">Delivery areas</a><a href="/track">Track your order</a>
+      <a href="/about">Our story</a><a href="/about#contact">Contact</a>
+      <a href="/updates">Kitchen updates</a><a href="/privacy-policy">Privacy</a>
+      <a href="/refund-cancellation-policy">Refund policy</a>
+    </nav>
+    {% if categories %}
+    <details class="f-more">
+      <summary>Browse the menu by category</summary>
+      <div class="f-chips">{% for c in categories %}<a href="/category/{{ c.slug }}">{{ c.name }}</a>{% endfor %}<a href="/category">All categories &rarr;</a></div>
+    </details>
+    {% endif %}
+    <details class="f-more">
+      <summary>Also known as · find us on</summary>
+      <div class="f-chips">
+      </div>
+    </details>
+  </div>
+</footer>
+<style>
+.footer { margin-top: 48px; background: #171A14; color: #D9D6CE; font-size: 14px; line-height: 1.55; }
+.footer-in { max-width: 1200px; margin: 0 auto; padding: 32px 40px calc(36px + env(safe-area-inset-bottom)); display: grid; grid-template-columns: 1.2fr 1.6fr; gap: 6px 48px; }
+.footer a { color: #fff; text-decoration: none; }
+.f-brand { display: flex; align-items: center; gap: 10px; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 18px; color: #fff; grid-column: 1; }
+.f-brand img { width: 30px; height: 30px; object-fit: contain; background: #FBF8F2; border-radius: 8px; padding: 2px; }
+.f-meta { margin: 6px 0 0; color: #B9B6AD; grid-column: 1; }
+.f-contact { display: flex; flex-direction: column; gap: 2px; margin-top: 10px; grid-column: 1; }
+.f-contact a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 600; font-family: 'IBM Plex Mono', monospace; font-size: 14px; }
+.f-links { grid-column: 2; grid-row: 1 / span 3; display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; align-content: start; }
+.f-links a { display: flex; align-items: center; min-height: 46px; border-bottom: 1px solid rgba(255,255,255,.1); font-size: 15px; }
+.f-more { grid-column: 1 / -1; border-top: 1px solid rgba(255,255,255,.1); margin-top: 14px; padding-top: 4px; }
+.f-more + .f-more { margin-top: 0; }
+.f-more summary { cursor: pointer; min-height: 48px; display: flex; align-items: center; justify-content: space-between; color: #B9B6AD; font-size: 13.5px; list-style: none; }
+.f-more summary::-webkit-details-marker { display: none; }
+.f-more summary::after { content: '+'; font-size: 20px; color: #fff; }
+.f-more[open] summary::after { content: '–'; }
+.f-chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px 0 14px; }
+.f-chips a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border: 1px solid rgba(255,255,255,.22); border-radius: 999px; font-size: 13.5px; }
+.f-aka { margin: 0; padding-bottom: 10px; font-size: 13px; color: #B9B6AD; }
+@media (max-width: 768px) {
+  .footer { margin-top: 36px; }
+  .footer-in { display: block; padding: 28px 18px calc(32px + env(safe-area-inset-bottom)); }
+  .f-links { margin-top: 10px; }
+  .f-more { margin-top: 12px; }
+  .f-more + .f-more { margin-top: 0; }
+}
+</style>
+{% endif %}

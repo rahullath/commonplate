@@ -1,0 +1,59 @@
+{
+  "version": "7.1",
+  "screens": [
+    {
+      "id": "CHECKOUT",
+      "title": "Checkout",
+      "terminal": true,
+      "success": true,
+      "data": {
+        "summary": {"type": "string", "__example__": "2 × North Indian Thali — ₹496\n1 × Masala Chai — ₹51\nSubtotal ₹547"},
+        "slots": {
+          "type": "array",
+          "items": {"type": "object", "properties": {"id": {"type": "string"}, "title": {"type": "string"}, "description": {"type": "string"}}},
+          "__example__": [{"id": "WHEN_NOW", "title": "As soon as possible", "description": "About 45–60 min"}, {"id": "WHEN_dinner_2026-10-14", "title": "Today dinner", "description": "6:30 – 9:30 PM"}]
+        },
+        "saved_address": {"type": "string", "__example__": "5, Example Street"},
+        "saved_pincode": {"type": "string", "__example__": "600004"},
+        "fees": {"type": "string", "__example__": "Delivery ₹49 within 3 km, ₹69 within 5 km, ₹89 within 7 km"}
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {"type": "TextSubheading", "text": "Your order"},
+          {"type": "TextBody", "text": "${data.summary}"},
+          {"type": "RadioButtonsGroup", "name": "order_type", "label": "Delivery or pickup?", "required": true,
+           "init-value": "delivery",
+           "data-source": [
+             {"id": "delivery", "title": "Delivery", "description": "${data.fees}"},
+             {"id": "pickup", "title": "Pickup", "description": "Collect from the kitchen"}
+           ]},
+          {"type": "If", "condition": "${form.order_type} == 'delivery'",
+           "then": [
+             {"type": "TextArea", "name": "address", "label": "Delivery address", "required": true,
+              "init-value": "${data.saved_address}", "max-length": 300,
+              "helper-text": "House / flat, street, area, landmark"},
+             {"type": "TextInput", "name": "pincode", "label": "Pincode", "input-type": "number",
+              "required": true, "init-value": "${data.saved_pincode}", "max-chars": 6, "min-chars": 6,
+              "helper-text": "6-digit pincode, e.g. 600004"}
+           ],
+           "else": []},
+          {"type": "Dropdown", "name": "when", "label": "When?", "required": true,
+           "data-source": "${data.slots}"},
+          {"type": "RadioButtonsGroup", "name": "payment", "label": "How will you pay?", "required": true,
+           "init-value": "upi",
+           "data-source": [
+             {"id": "upi", "title": "UPI", "description": "GPay, PhonePe, Paytm: we send a pay button"},
+             {"id": "cod", "title": "Cash", "description": "Pay the rider, or at the counter"}
+           ]},
+          {"type": "TextArea", "name": "note", "label": "Note for the kitchen", "required": false,
+           "max-length": 200, "helper-text": "Optional: less spicy, no onion, Jain…"},
+          {"type": "Footer", "label": "Review order",
+           "on-click-action": {"name": "complete", "payload": {
+             "order_type": "${form.order_type}", "address": "${form.address}", "pincode": "${form.pincode}",
+             "when": "${form.when}", "payment": "${form.payment}", "note": "${form.note}"}}}
+        ]
+      }
+    }
+  ]
+}

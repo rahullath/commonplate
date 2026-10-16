@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+{% block meta %}
+<meta name="description" content="My orders — {{ biz.name }}. See your recent orders and their live status on this device, or look up by phone number if you're on a new one.">
+<title>My Orders | {{ biz.name }}</title>
+{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ site_url }}/track">{% endblock %}
+{% block fonts %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+{% endblock %}
+{% block styles %}{% endblock %}
+{% block body %}
+<style>
+:root { --g: #0E7A45; --sf: #E08A1E; --bg: #FBF8F2; --card: #fff; --border: #E7E1D6; --ink: #171A14; --sub: #6F7468; --line2: #EFEBE3; --amber-bg: #FBF0DE; --amber-border: #EFDFC2; --amber-ink: #8A5A12; --green-bg: #EDF6E2; --green-ink: #2C5A1E; }
+* { box-sizing: border-box; margin: 0; }
+body { font-family: 'IBM Plex Sans', system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+
+.page { max-width: 620px; margin: 0 auto; padding: 28px 18px 24px; }
+.page-tag { display: none; }
+.page-tag-old { font: 500 12px/1 'IBM Plex Mono', monospace; color: var(--g); letter-spacing: .05em; text-transform: uppercase; }
+.page h1 { font-family: 'Bricolage Grotesque', sans-serif; font-size: 32px; margin: 0; line-height: 1.05; letter-spacing: -.02em; }
+.page-sub { margin: 10px 0 0; font-size: 15px; line-height: 1.6; color: var(--sub); }
+
+#my-orders-list { margin-top: 26px; display: flex; flex-direction: column; gap: 14px; }
+.order-card { background: var(--card); border: 1px solid #ECE6DA; border-radius: 18px; padding: 16px; }
+.order-card.active { border: 2px solid var(--g); }
+.btn-fill, .btn-line { height: 52px; border-radius: 14px; }
+.order-card-top { display: flex; justify-content: space-between; align-items: center; }
+.badge { font: 600 12px/1 'IBM Plex Mono', monospace; border-radius: 999px; padding: 7px 11px; white-space: nowrap; }
+.badge.active { color: #fff; background: var(--g); }
+.badge.done { color: var(--green-ink); background: var(--green-bg); }
+.badge.cancelled { color: #B44D2E; background: #FBEAE4; }
+.order-card-date { font-size: 13px; color: var(--sub); }
+.order-card-body { display: flex; gap: 14px; margin-top: 12px; }
+.order-card-photo { width: 64px; height: 64px; flex: none; border-radius: 14px; overflow: hidden; background: var(--line2); }
+.order-card-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.order-card-info { flex: 1; min-width: 0; }
+.order-card-items { font-size: 15px; font-weight: 600; line-height: 1.4; }
+.order-card-price { font-size: 14px; color: var(--sub); margin-top: 4px; }
+.order-card-cta { margin-top: 12px; display: flex; gap: 10px; }
+.btn-fill { flex: 1; background: var(--g); color: #fff; border: 0; border-radius: 14px; height: 48px; font: 600 15px 'IBM Plex Sans', sans-serif; cursor: pointer; text-decoration: none; display: flex; align-items: center; justify-content: center; }
+.btn-line { flex: 1; background: #fff; color: var(--g); border: 1.5px solid var(--g); border-radius: 14px; height: 48px; font: 600 15px 'IBM Plex Sans', sans-serif; cursor: pointer; text-decoration: none; display: flex; align-items: center; justify-content: center; }
+
+
+.live-card { display: block; text-decoration: none; background: var(--g); color: #fff; border-radius: 20px; padding: 18px; }
+.lc-top { display: flex; justify-content: space-between; gap: 10px; font: 700 12px/1 'IBM Plex Mono', monospace; letter-spacing: .05em; opacity: .9; }
+.lc-eta { margin-top: 12px; font: 700 24px/1.2 'Bricolage Grotesque', sans-serif; }
+.lc-items { margin-top: 6px; font-size: 14px; opacity: .92; }
+.lc-bar { margin-top: 14px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.25); }
+.lc-bar > div { height: 100%; border-radius: 3px; background: #fff; }
+.lc-btn { margin-top: 16px; min-height: 52px; border-radius: 12px; background: var(--bg); color: var(--g); display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; }
+.live-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; text-decoration: none; color: var(--ink); background: #fff; border: 1px solid #ECE6DA; border-radius: 20px; padding: 16px 18px; min-height: 72px; }
+.lr-k { font: 700 12px/1 'IBM Plex Mono', monospace; letter-spacing: .05em; color: #B06A00; }
+.lr-t { margin-top: 8px; font: 700 18px/1.2 'Bricolage Grotesque', sans-serif; }
+.lr-i { margin-top: 4px; font-size: 14px; color: var(--sub); }
+.lr-go { font-size: 24px; color: #8A8F84; }
+.earlier { margin-top: 14px; font: 600 12px/1 'IBM Plex Mono', monospace; letter-spacing: .06em; color: #5C6157; }
+.past-row { background: #fff; border: 1px solid #ECE6DA; border-radius: 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 6px 0 0; }
+.past-row a { flex: 1; display: flex; justify-content: space-between; gap: 10px; align-items: center; min-height: 52px; padding: 0 12px 0 18px; text-decoration: none; color: var(--ink); font-size: 15px; }
+.pr-d { color: var(--sub); }
+.pr-again { border: 0; background: none; color: var(--g); font-weight: 700; font-size: 14px; min-height: 44px; padding: 0 12px; cursor: pointer; }
+.empty { margin-top: 22px; background: var(--card); border: 1px solid #ECE6DA; border-radius: 20px; padding: 28px 22px 22px; text-align: center; color: #4A4F45; font-size: 15px; line-height: 1.55; }
+.empty b { display: block; font-family: 'Bricolage Grotesque', sans-serif; font-size: 22px; color: var(--ink); margin-bottom: 6px; }
+.empty .btn-fill { margin-top: 18px; }
+.loading { margin-top: 26px; color: var(--sub); font-size: 14px; }
+
+.fallback { margin-top: 22px; background: #F3EFE7; border: none; border-radius: 18px; padding: 18px; }
+.fallback-text { font-size: 14.5px; line-height: 1.5; color: var(--ink); font-weight: 600; }
+.fallback-row { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.fallback input[type=tel] { min-height: 52px; border: 1px solid #CFC8B9; border-radius: 12px; padding: 0 14px; font: 400 15px 'IBM Plex Sans', sans-serif; color: var(--ink); background: #fff; }
+.fallback button { background: var(--g); color: #fff; border: 0; border-radius: 14px; min-height: 52px; padding: 0 20px; font: 600 15.5px 'IBM Plex Sans', sans-serif; cursor: pointer; }
+.fallback button[disabled] { opacity: .5; cursor: default; }
+.fallback .msg { margin-top: 10px; font-size: 13.5px; color: #4A4F45; }
+.fallback .msg.err { color: #B44D2E; }
+.fallback ul { list-style: none; display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.fallback ul li a { display: flex; justify-content: space-between; gap: 12px; background: #fff; border: 1px solid var(--amber-border); border-radius: 10px; padding: 11px 14px; text-decoration: none; color: var(--ink); font-size: 14px; }
+
+.page-cta { margin-top: 18px; display: flex; gap: 22px; justify-content: center; }
+.page-cta a { color: var(--g); padding: 12px 0; font-size: 14.5px; font-weight: 600; text-decoration: none; }
+</style>
+
+<div class="page">
+  <h1 id="page-title">My orders</h1>
+  <p class="page-sub">Kept on this phone. No login, no order number to find.</p>
+
+  <div id="my-orders-list" hidden></div>
+  <div class="loading" id="my-orders-loading" hidden>Loading your orders…</div>
+  <div class="empty" id="my-orders-empty" hidden><b>No orders on this phone yet</b>Once you order, it shows up here by itself. Ordered from another phone? Use your number below.<a class="btn-fill" href="/menu">Order now &rarr;</a></div>
+
+  <div class="fallback">
+    <div class="fallback-text" id="fallback-text">Changed phones, or don't see an order above? Enter your number and we'll find it.</div>
+    <div class="fallback-row">
+      <input type="tel" id="phone" placeholder="10-digit mobile number" autocomplete="tel" inputmode="numeric" aria-label="Phone number">
+      <button id="phone-btn" type="button">Find my orders</button>
+    </div>
+    <div class="msg" id="phone-msg"></div>
+    <ul id="phone-orders" hidden></ul>
+  </div>
+
+  <div class="page-cta">
+    <a href="/delivery">Delivery areas</a>
+    <a href="tel:{{ biz.phone_e164 }}">Call the kitchen</a>
+  </div>
+</div>
+
+<script>
+(function () {
+  var DISH_PHOTOS = {{ dish_photos | tojson }};
+  var MY_ORDERS_KEY = "cp_my_orders";
+  var ACTIVE_STATUSES = { "new": 1, "preparing": 1, "ready": 1, "out_for_delivery": 1 };
+  var STATUS_LABEL = {
+    "new": "ORDER PLACED", "preparing": "COOKING", "ready": "READY",
+    "out_for_delivery": "ON THE WAY", "delivered": "DELIVERED", "cancelled": "CANCELLED",
+  };
+
+  function itemsSummary(items) {
+    return (items || []).map(function (i) {
+      return i.qty > 1 ? i.name + " × " + i.qty : i.name;
+    }).join(", ");
+  }
+
+  function photoFor(items) {
+    var first = (items || [])[0];
+    if (!first || DISH_PHOTOS.indexOf(first.item_id) === -1) return null;
+    return "/static/img/dishes/" + first.item_id + ".jpg";
+  }
+
+  function dateLabel(iso) {
+    if (!iso) return "";
+    var d = new Date(iso.replace(" ", "T") + (iso.indexOf("Z") === -1 && iso.indexOf("+") === -1 ? "" : ""));
+    if (isNaN(d.getTime())) return iso;
+    var today = new Date();
+    var isToday = d.toDateString() === today.toDateString();
+    var time = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+    return isToday ? "Today, " + time : d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  }
+
+  var RANK = { "out_for_delivery": 3, "ready": 2, "preparing": 1, "new": 0 };
+  var PROGRESS = { "new": 15, "preparing": 40, "ready": 65, "out_for_delivery": 85 };
+  function etaText(o) {
+    var pick = o.order_type === "pickup";
+    return { "new": pick ? "Ready in about 20–25 min" : "Arriving in about 40–60 min",
+             "preparing": pick ? "Ready in about 15–20 min" : "Arriving in about 30–45 min",
+             "ready": pick ? "Ready to collect" : "Arriving in about 20–30 min",
+             "out_for_delivery": "Arriving in about 15 min" }[o.status] || "";
+  }
+  function esc(t) { return String(t == null ? "" : t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  // The soonest order is shown in full; other live orders shrink to one line.
+  function liveFull(o) {
+    var a = document.createElement("a");
+    a.className = "live-card"; a.href = "/track/" + o.tracking_token;
+    var pick = o.order_type === "pickup";
+    a.innerHTML =
+      '<div class="lc-top"><span>ORDER #' + o.id + (pick ? " · PICKUP" : "") + '</span><span>' + (STATUS_LABEL[o.status] || "") + '</span></div>' +
+      '<div class="lc-eta">' + etaText(o) + '</div>' +
+      '<div class="lc-items">' + esc(itemsSummary(o.items)) + '</div>' +
+      '<div class="lc-bar"><div style="width:' + (PROGRESS[o.status] || 10) + '%"></div></div>' +
+      '<span class="lc-btn">' + (o.status === "out_for_delivery" ? "Track rider" : "Track order") + '</span>';
+    return a;
+  }
+  function liveRow(o) {
+    var a = document.createElement("a");
+    a.className = "live-row"; a.href = "/track/" + o.tracking_token;
+    a.innerHTML = '<div><div class="lr-k">ORDER #' + o.id + (o.order_type === "pickup" ? " · PICKUP" : "") + '</div>' +
+      '<div class="lr-t">' + ({ "new": "Order placed", "preparing": "Being cooked", "ready": "Ready", "out_for_delivery": "On its way" }[o.status] || "") + '</div>' +
+      '<div class="lr-i">' + esc(itemsSummary(o.items)) + '</div></div><span class="lr-go">›</span>';
+    return a;
+  }
+  function pastRow(o) {
+    var cancelled = o.status === "cancelled";
+    var row = document.createElement("div");
+    row.className = "past-row";
+    row.innerHTML = '<a href="/track/' + o.tracking_token + '"><span>#' + o.id + ' · ' + (cancelled ? "Cancelled" : "Delivered") + '</span><span class="pr-d">' + dateLabel(o.scheduled_at || o.created_at) + '</span></a>';
+    if (!cancelled) {
+      var b = document.createElement("button"); b.type = "button"; b.className = "pr-again"; b.textContent = "Order again";
+      b.addEventListener("click", function () { reorder(o); });
+      row.appendChild(b);
+    }
+    return row;
+  }
+
+  function reorder(order) {
+    var cart = {};
+    (order.items || []).forEach(function (i) { cart[i.item_id] = (cart[i.item_id] || 0) + i.qty; });
+    try { localStorage.setItem("cp_menu_cart", JSON.stringify(cart)); } catch (_) {}
+    window.location.href = "/menu#checkout";
+  }
+
+  function loadMyOrders() {
+    var saved;
+    try { saved = JSON.parse(localStorage.getItem(MY_ORDERS_KEY) || "[]"); } catch (_) { saved = []; }
+    var list = document.getElementById("my-orders-list");
+    var loading = document.getElementById("my-orders-loading");
+    var empty = document.getElementById("my-orders-empty");
+    if (!saved.length) { empty.hidden = false; return; }
+
+    loading.hidden = false;
+    var tokens = saved.slice(0, 20).map(function (o) { return o.tracking_token; });
+    Promise.all(tokens.map(function (t) {
+      return fetch("/api/orders/" + encodeURIComponent(t)).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+    })).then(function (results) {
+      loading.hidden = true;
+      var orders = results.filter(Boolean);
+      if (!orders.length) { empty.hidden = false; return; }
+      list.hidden = false;
+      var live = orders.filter(function (o) { return ACTIVE_STATUSES[o.status]; })
+        .sort(function (a, b) { return (RANK[b.status] - RANK[a.status]) || (a.id - b.id); });
+      var past = orders.filter(function (o) { return !ACTIVE_STATUSES[o.status]; });
+      if (live.length) {
+        document.getElementById("page-title").textContent = live.length + (live.length === 1 ? " order" : " orders") + " on the way";
+        list.appendChild(liveFull(live[0]));
+        live.slice(1).forEach(function (o) { list.appendChild(liveRow(o)); });
+      }
+      if (past.length) {
+        var h = document.createElement("div"); h.className = "earlier"; h.textContent = "EARLIER"; list.appendChild(h);
+        past.forEach(function (o) { list.appendChild(pastRow(o)); });
+      }
+    });
+  }
+
+  // Phone-number fallback (new/changed device)
+  var phoneInput = document.getElementById("phone");
+  var phoneBtn = document.getElementById("phone-btn");
+  var phoneMsg = document.getElementById("phone-msg");
+  var phoneOrders = document.getElementById("phone-orders");
+
+  function setMsg(el, text, isErr) {
+    el.textContent = text;
+    el.className = "msg" + (isErr ? " err" : "");
+  }
+
+  phoneBtn.addEventListener("click", function () {
+    var p = String(phoneInput.value || "").replace(/[^\d]/g, "").slice(-10);
+    if (p.length !== 10) { setMsg(phoneMsg, "Enter a valid 10-digit mobile number.", true); return; }
+    phoneBtn.disabled = true;
+    setMsg(phoneMsg, "");
+    fetch("/api/orders/lookup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: p }),
+    }).then(function (r) { return r.json(); }).then(function (data) {
+      phoneBtn.disabled = false;
+      var list = data.orders || [];
+      if (!list.length) { setMsg(phoneMsg, "No orders found for this number."); phoneOrders.hidden = true; return; }
+      phoneOrders.hidden = false;
+      phoneOrders.innerHTML = "";
+      list.forEach(function (o) {
+        var li = document.createElement("li");
+        var a = document.createElement("a");
+        a.href = "/track/" + o.tracking_token;
+        a.innerHTML = "<span>" + (STATUS_LABEL[o.status] || o.status) + "</span><span>₹" + o.total + "</span>";
+        li.appendChild(a);
+        phoneOrders.appendChild(li);
+      });
+    }).catch(function () {
+      phoneBtn.disabled = false;
+      setMsg(phoneMsg, "Something went wrong. Try again in a moment.", true);
+    });
+  });
+  phoneInput.addEventListener("keydown", function (e) { if (e.key === "Enter") phoneBtn.click(); });
+
+  loadMyOrders();
+})();
+</script>
+{% endblock %}

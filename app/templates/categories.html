@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block meta %}
+<meta name="description" content="Every menu category at {{ biz.name }}.">
+<title>Menu Categories | {{ biz.name }}</title>
+{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ index_url }}">{% endblock %}
+{% block body %}
+<main class="page" style="max-width:900px;margin:0 auto;padding:40px 18px;">
+  <h1>Menu categories</h1>
+  <p class="page-sub">{{ total_items }} dishes in {{ groups | length }} categories.</p>
+  <ul>{% for g in groups %}<li><a href="/category/{{ g.slug }}">{{ g.name }}</a> ({{ g.count }})</li>{% endfor %}</ul>
+</main>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block meta %}
+<meta name="description" content="About {{ biz.name }}: contact, address and opening hours.">
+<title>About · {{ biz.name }}</title>
+{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ site_url }}/about">{% endblock %}
+{% block body %}
+<main class="page" style="max-width:900px;margin:0 auto;padding:40px 18px;">
+  <h1>About {{ biz.name }}</h1>
+  <p class="page-sub">Edit this page in <code>app/templates/about.html</code>.</p>
+  <h2>Contact</h2>
+  <p>{{ biz.address_full }}<br>{{ biz.phone_display }}<br>{{ biz.email }}</p>
+  <h2>Hours</h2>
+  <p>{{ biz.hours }}</p>
+</main>
+{% endblock %}

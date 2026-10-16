@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block meta %}
+<meta name="description" content="Privacy policy for {{ biz.name }}.">
+<title>Privacy Policy | {{ biz.name }}</title>
+{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ site_url }}/privacy-policy">{% endblock %}
+{% block body %}
+<main class="page" style="max-width:760px;margin:0 auto;padding:40px 18px;">
+  <h1>Privacy Policy</h1>
+  <p>This is a template. Have it reviewed for your jurisdiction before you publish it.</p>
+  <h2>What we collect</h2>
+  <p>Your name, phone number, delivery address and order contents, so we can cook and deliver your order and tell you about it.</p>
+  <h2>Who sees it</h2>
+  <p>{{ biz.name }} staff, and the delivery partner for the length of the delivery. We do not sell personal data.</p>
+  <h2>Your rights</h2>
+  <p>To see or delete your data, contact {{ biz.email }}.</p>
+</main>
+{% endblock %}

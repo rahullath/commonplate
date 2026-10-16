@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block meta %}
+<meta name="description" content="Where {{ biz.name }} delivers and what delivery costs.">
+<title>Delivery Areas &amp; Charges | {{ biz.name }}</title>
+{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ site_url }}/delivery">{% endblock %}
+{% block fonts %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+{% endblock %}
+{% block styles %}{% endblock %}
+{% block body %}
+<style>
+:root { --g: #0E7A45; --sf: #E08A1E; --bg: #FBF8F2; --card: #fff; --border: #E7E1D6; --ink: #171A14; --sub: #6F7468; --line2: #EFEBE3; }
+* { box-sizing: border-box; margin: 0; }
+body { font-family: 'IBM Plex Sans', system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+
+.page { max-width: 880px; margin: 0 auto; padding: 48px 40px 64px; }
+.page-tag { font: 500 12px/1 'IBM Plex Mono', monospace; color: var(--g); letter-spacing: .05em; text-transform: uppercase; }
+.page h1 { font-family: 'Bricolage Grotesque', sans-serif; font-size: clamp(30px, 4vw, 42px); margin: 12px 0 0; line-height: 1.08; }
+.page-sub { margin: 16px 0 0; font-size: 16px; line-height: 1.65; color: #43483F; max-width: 620px; }
+
+.zone-table { margin-top: 26px; width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+.zone-table th, .zone-table td { text-align: left; padding: 15px 18px; font-size: 15px; border-top: 1px solid #F3F0EA; }
+.zone-table thead th { background: #F5F1E8; font: 500 11px/1 'IBM Plex Mono', monospace; color: var(--sub); letter-spacing: .05em; text-transform: uppercase; padding: 13px 18px; border-top: 0; }
+.zone-table td { color: #43483F; }
+.zone-table .zone-dist, .zone-table .zone-time { color: var(--sub); }
+.zone-fee { font-weight: 600; color: var(--ink); }
+.zone-note { padding: 14px 18px; border-top: 1px solid #F3F0EA; background: #EDF6E2; font-size: 14px; color: #2C5A1E; line-height: 1.6; }
+
+.snippet { margin-top: 26px; }
+.snippet h2 { font-family: 'Bricolage Grotesque', sans-serif; font-size: 20px; margin: 26px 0 8px; line-height: 1.25; }
+.snippet p { font-size: 15px; line-height: 1.7; color: #43483F; max-width: 720px; }
+
+.faq-list { max-width: 720px; }
+.faq-item { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; margin-top: 14px; }
+.faq-item h2 { font-size: 16.5px; font-weight: 600; }
+.faq-item p { margin: 7px 0 0; font-size: 14.5px; line-height: 1.7; color: #43483F; }
+
+.faq-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+.faq-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; }
+.faq-title { font-size: 16px; font-weight: 600; }
+.faq-desc { margin: 8px 0 0; font-size: 14px; line-height: 1.65; color: #43483F; }
+
+.page-cta { margin-top: 40px; background: var(--g); color: #fff; border-radius: 16px; padding: 32px 34px; display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap; }
+.page-cta-text { font-family: 'Bricolage Grotesque', sans-serif; font-size: 22px; }
+.page-cta a { background: #fff; color: var(--g); border-radius: 12px; padding: 14px 24px; font-size: 15px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+
+@media (max-width: 768px) {
+  .page { padding: 32px 18px 48px; }
+  .zone-table { background: none; border: none; border-radius: 0; }
+  .zone-table thead { display: none; }
+  .zone-table, .zone-table tbody { display: block; }
+  .zone-table tbody tr { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 14px 16px; margin-bottom: 10px; }
+  .zone-table td { display: block; padding: 0; border: 0; font-size: 13.5px; }
+  .zone-table td::before { display: none; }
+  .zone-table td[data-label="Area"] { grid-column: 1; font-size: 16px; font-weight: 600; color: var(--ink); }
+  .zone-table td[data-label="Delivery fee"] { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+  .zone-table .zone-fee { font-family: 'Bricolage Grotesque', sans-serif; font-size: 26px; }
+  .zone-table td[data-label="Distance"] { grid-column: 1; }
+  .zone-table td[data-label="Typical delivery"] { grid-column: 1; }
+  .zone-note { border-radius: 14px; border: 0; }
+  .page-cta { flex-direction: column; text-align: center; }
+}
+</style>
+
+<div class="page">
+  <div class="page-tag">Delivery</div>
+  <h1>Where we deliver, and what it costs</h1>
+  <p class="page-sub">We deliver from the kitchen at {{ biz.street_address }}. A rider is booked for each order, so the food comes straight to you and never sits at a hub.</p>
+
+  <div class="snippet">
+    <h2>{{ faqs[0].q }}</h2>
+    <p>{{ faqs[0].a }}</p>
+  </div>
+
+  <table class="zone-table">
+    <thead>
+      <tr>
+        <th scope="col">Area</th>
+        <th scope="col">Distance</th>
+        <th scope="col">Delivery fee</th>
+        <th scope="col">Typical delivery</th>
+      </tr>
+    </thead>
+    <tbody>
+{%- for r in rows %}
+      <tr>
+        <td data-label="Area">{{ r.areas }}</td>
+        <td data-label="Distance">{{ r.distance }}</td>
+        <td data-label="Delivery fee"><span class="zone-fee">₹{{ r.fee }}</span></td>
+        <td data-label="Typical delivery"><span class="zone-time">{{ r.ride }}</span></td>
+      </tr>
+{%- endfor %}
+    </tbody>
+  </table>
+  <div class="zone-note">One fixed fee for your distance, shown at checkout and included in your total. Nothing is added later, whatever the rider costs us.</div>
+
+  <div class="snippet faq-list">
+    <h2 style="margin-top:36px">Delivery questions, answered</h2>
+
+    {% for f in faqs[1:] %}
+    <div class="faq-item">
+      <h2>{{ f.q }}</h2>
+      <p>{{ f.a }}</p>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="page-cta">
+    <div class="page-cta-text">Check what's cooking today</div>
+    <a href="/menu">See today's menu &rarr;</a>
+  </div>
+</div>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {% for f in faqs %}
+    {
+      "@type": "Question",
+      "name": {{ f.q | tojson }},
+      "acceptedAnswer": { "@type": "Answer", "text": {{ f.a | tojson }} }
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ]
+}
+</script>
+{% endblock %}
