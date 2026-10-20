@@ -13,7 +13,7 @@ from fastapi.templating import Jinja2Templates
 from xml.sax.saxutils import escape as xml_escape
 from pydantic import BaseModel, Field
 
-from . import catalog, db, faqs, menu, orders, reviews, seo_aliases, wa_link
+from . import catalog, db, faqs, marketing, menu, orders, reviews, seo_aliases, wa_link
 from .config import (
     ADMIN_TOKEN,
     DELIVERY_ZONES,
@@ -733,6 +733,12 @@ def about_page(request: Request):
     )
 
 
+@app.get("/commonplate", response_class=HTMLResponse)
+def commonplate_page(request: Request):
+    """Project page: what commonplate is, for kitchens, riders and workers."""
+    return templates.TemplateResponse(request, "commonplate.html", marketing.page_context(SITE_URL))
+
+
 @app.get("/updates", response_class=HTMLResponse)
 def updates_page(request: Request):
     """Fresh from the Kitchen — compilation of Instagram/WhatsApp posts and
@@ -991,6 +997,7 @@ SITEMAP_TEMPLATES = {
     "/updates": "updates.html",
     "/category": "categories.html",
     "/how-to-order": "how-to-order.html",
+    "/commonplate": "commonplate.html",
 }
 
 

@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>commonplate: open-source direct ordering for kitchens, riders and workers</title>
+<meta name="description" content="Small kitchens leave the delivery apps and sell direct. Riders get a receipt for every trip and a vote on the rules. Open-source (AGPL), no commission, no middleman.">
+<link rel="canonical" href="{{ site_url }}/commonplate">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="commonplate">
+<meta property="og:title" content="commonplate: cook it, ride it, own it">
+<meta property="og:description" content="Open-source direct ordering for small kitchens, with transparent rider pay and worker votes. No commission, no middleman.">
+<meta property="og:url" content="{{ site_url }}/commonplate">
+<meta property="og:image" content="{{ site_url }}/static/logo.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#EFE6D2">
+<link rel="icon" type="image/png" href="/static/logo.png">
+<script type="application/ld+json">{{ ld | tojson }}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anybody:wdth,wght@50..150,100..900&family=Archivo:wght@400;500;600;800&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#EFE6D2;color:#17120D;font-family:'Archivo',sans-serif;overflow-x:hidden}
+a{color:#C8321E}a:hover{color:#1F3FA8}button{font-family:inherit}*{box-sizing:border-box}
+.seg{flex:1;border:0;padding:11px 6px;font-weight:700;cursor:pointer;background:transparent;color:#17120D}
+.seg[aria-pressed=true]{background:#17120D;color:#EFE6D2}
+.role{border:2.5px solid #17120D;border-radius:30px;padding:10px 20px;font-size:16px;font-weight:700;cursor:pointer;background:transparent;color:#17120D}
+.role[aria-pressed=true]{background:#17120D;color:#EFE6D2}
+[hidden]{display:none!important}
+button:focus-visible,a:focus-visible{outline:3px solid #F0B21B;outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<main>
+
+
+
+<div style="position:fixed;inset:0;pointer-events:none;z-index:50;opacity:0.5;mix-blend-mode:multiply;background-image:url(&quot;data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.35  0 0 0 0 0.28  0 0 0 0 0.18  0 0 0 0.55 0'/></filter><rect width='240' height='240' filter='url(%23n)'/></svg>&quot;)"></div>
+
+<section data-screen-label="01 Hero" style="position:relative;padding:24px clamp(20px,5vw,72px) 140px;display:flex;flex-direction:column;gap:40px">
+  <div style="display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap">
+    <div style="font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 80;font-weight:900;font-size:26px;text-transform:uppercase;letter-spacing:0.01em">commonplate</div>
+    <div style="display:flex;gap:18px;font-size:14px;font-weight:600"><a href="#kitchens" style="color:#17120D">Kitchens</a><a href="#riders" style="color:#17120D">Riders</a><a href="#workers" style="color:#17120D">Kitchen workers</a><a href="#core" style="color:#17120D">The core</a><a href="#about" style="color:#17120D">About me</a></div>
+  </div>
+  <div style="position:relative;padding-top:8px">
+    <h1 style="margin:0;font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 62;font-weight:900;text-transform:uppercase;font-size:clamp(72px,17vw,280px);line-height:0.82;letter-spacing:-0.01em">
+      <span style="display:block;color:#17120D">Cook it.</span>
+      <span style="display:block;color:#C8321E;margin-left:clamp(0px,6vw,100px);text-shadow:5px 4px 0 #F0B21B">Ride it.</span>
+      <span style="display:block;color:#1F3FA8;margin-left:clamp(0px,2vw,30px)">Own it.</span>
+    </h1>
+    <svg viewBox="0 0 520 40" preserveAspectRatio="none" style="width:clamp(180px,30vw,460px);height:34px;margin:6px 0 0 clamp(0px,2vw,30px);display:block"><path d="M4 22 C 90 4, 160 36, 250 18 S 430 10, 514 24" stroke="#1F3FA8" stroke-width="9" fill="none" stroke-linecap="round"></path></svg>
+    <div style="position:absolute;right:clamp(0px,3vw,48px);top:10px;transform:rotate(-7deg);border:4px solid #C8321E;color:#C8321E;padding:10px 18px;font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 75;font-weight:800;font-size:clamp(16px,2vw,28px);line-height:1.05;text-transform:uppercase;text-align:center;opacity:0.9;border-radius:6px">Open source<br>No commission<br>No middleman</div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:32px;align-items:end;max-width:1100px">
+    <p style="margin:0;font-size:clamp(19px,2vw,25px);line-height:1.38;text-wrap:pretty;font-weight:500">Small kitchens leave the delivery apps and sell direct. Their riders stop being invisible. Every trip is written down, paid in the open and counted, and that record is what lets informal workers organise and be recognised.</p>
+    <div style="font-family:'Caveat',cursive;font-size:30px;line-height:1.05;color:#C8321E;transform:rotate(-2deg)">three ways in, one shared engine. scroll. all numbers are sample data.</div>
+  </div>
+</section>
+
+<section id="kitchens" data-screen-label="02 Kitchens" style="position:relative;background:#C8321E;color:#EFE6D2;padding:150px clamp(20px,5vw,72px) 160px;margin-top:-70px;clip-path:polygon(0 0,100% 70px,100% calc(100% - 50px),0 100%);overflow:hidden">
+  <div style="position:absolute;right:-2vw;top:60px;font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 50;font-weight:900;font-size:clamp(300px,42vw,720px);line-height:0.8;color:#A82616">1</div>
+  <div style="position:relative;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:72px;align-items:center">
+    <div style="display:flex;flex-direction:column;gap:26px;max-width:620px">
+      <div style="font-weight:800;font-size:14px;letter-spacing:0.14em;text-transform:uppercase">For the independent kitchen</div>
+      <h2 style="margin:0;font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 62;font-weight:900;text-transform:uppercase;font-size:clamp(60px,9vw,150px);line-height:0.84">Keep the whole order.</h2>
+      <p style="margin:0;font-size:20px;line-height:1.42;font-weight:500">Your menu, your page, your customers' numbers. Orders land on one kitchen screen. UPI or cash goes straight to you. Riders come from the shared pool.</p>
+      <div style="display:flex;flex-direction:column;font-size:17px;font-weight:500">
+        <div style="padding:12px 0;border-top:2px dashed #EFE6D2">Import your menu from Petpooja, or type it in once.</div>
+        <div style="padding:12px 0;border-top:2px dashed #EFE6D2">WhatsApp updates go from your own number.</div>
+        <div style="padding:12px 0;border-top:2px dashed #EFE6D2;border-bottom:2px dashed #EFE6D2">Leave any day with your data. It sits in a file you own.</div>
+      </div>
+      <div style="font-size:15px;line-height:1.5;max-width:480px">Money kept here is what pays riders properly. Kitchens commit to the rider pool so the saving does not stop at the owner.</div>
+    </div>
+    <div style="display:flex;justify-content:center;position:relative">
+      <div style="position:absolute;left:-6px;top:-70px;display:flex;align-items:flex-end;gap:2px;transform:rotate(-4deg)"><div style="font-family:'Caveat',cursive;font-size:32px;line-height:1">tap these</div><svg width="70" height="50" viewBox="0 0 70 50" style="margin-bottom:-26px"><path d="M4 6 C 26 -2, 52 10, 58 38" stroke="#EFE6D2" stroke-width="3" fill="none" stroke-linecap="round"></path><path d="M46 32 L58 42 L64 28" stroke="#EFE6D2" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+      <div style="position:relative;width:340px;max-width:100%;border:3px solid #17120D;border-radius:28px;background:#EFE6D2;color:#17120D;padding:20px 18px;display:flex;flex-direction:column;gap:14px;min-height:560px;transform:rotate(-2.5deg);box-shadow:0 26px 34px -10px rgba(0,0,0,0.5)">
+        <div style="position:absolute;top:-14px;left:26px;width:76px;height:26px;background:rgba(240,178,27,0.85);transform:rotate(-6deg)"></div>
+        <div style="position:absolute;top:-14px;right:26px;width:76px;height:26px;background:rgba(240,178,27,0.85);transform:rotate(5deg)"></div>
+        <div style="font-weight:800;font-size:13px;letter-spacing:0.08em">ORDER #212 · ₹400 · 2 ITEMS</div>
+        <div role="group" aria-label="Where the order came from" style="display:flex;border:2px solid #17120D;border-radius:8px;overflow:hidden">
+          <button type="button" class="seg" data-k="app" aria-pressed="true">Via a delivery app</button>
+          <button type="button" class="seg" data-k="direct" aria-pressed="false">Via your page</button>
+        </div>
+        {% for mode, lines in klines.items() %}<div data-kpane="{{ mode }}"{% if not loop.first %} hidden{% endif %}>{% for l in lines %}<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px dotted #17120D;font-size:15px"><span>{{ l.k }}</span><b style="color:{{ l.c }}">{{ l.v }}</b></div>{% endfor %}</div>{% endfor %}
+        <div style="margin-top:auto;display:flex;justify-content:space-between;align-items:baseline"><span style="font-weight:700">You keep</span><b id="keep" style="font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 75;font-weight:900;font-size:62px;line-height:1;color:#C8321E" aria-live="polite">₹272</b></div>
+        <div id="knote" style="font-size:12px;line-height:1.4;color:#554a3b">{{ knotes.app }}</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="riders" data-screen-label="03 Riders" style="position:relative;background:#1F3FA8;color:#EFE6D2;padding:160px clamp(20px,5vw,72px) 170px;margin-top:-50px;clip-path:polygon(0 50px,100% 0,100% calc(100% - 60px),0 100%);overflow:hidden">
+  <div style="position:absolute;left:-3vw;top:70px;font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 50;font-weight:900;font-size:clamp(300px,42vw,720px);line-height:0.8;color:#18348A">2</div>
+  <div style="position:relative;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:72px;align-items:center">
+    <div style="display:flex;justify-content:center;position:relative;order:2">
+      <div style="position:absolute;right:-4px;top:-76px;font-family:'Caveat',cursive;font-size:32px;line-height:1;transform:rotate(3deg);color:#F0B21B">try a whole trip →</div>
+      <div style="position:relative;width:340px;max-width:100%;border:3px solid #17120D;border-radius:28px;background:#EFE6D2;color:#17120D;padding:20px 18px;display:flex;flex-direction:column;gap:14px;min-height:560px;transform:rotate(2deg);box-shadow:0 26px 34px -10px rgba(0,0,0,0.55)">
+        <div style="position:absolute;top:-14px;left:50%;margin-left:-38px;width:76px;height:26px;background:rgba(240,178,27,0.85);transform:rotate(3deg)"></div>
+        <div style="display:flex;justify-content:space-between;font-weight:800;font-size:13px;letter-spacing:0.08em"><span>RIDER R-14</span><span>TRIPS THIS WEEK: <span id="trips">41</span></span></div>
+        <div data-r="0" style="display:flex;flex-direction:column;flex:1">
+          <div style="display:flex;flex-direction:column;gap:14px;flex:1">
+            <div style="font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 70;font-weight:900;text-transform:uppercase;font-size:38px;line-height:0.92">Amma Mess → Alwarpet</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px"><div><div style="font-size:12px;color:#554a3b">distance</div><b style="font-size:21px">2.1 km</b></div><div><div style="font-size:12px;color:#554a3b">ready in</div><b style="font-size:21px">6 min</b></div><div><div style="font-size:12px;color:#554a3b">you earn</div><b style="font-size:21px">₹70</b></div></div>
+            <div style="background:#F0B21B;padding:12px;font-size:14px;line-height:1.4;border-radius:6px"><b>Why you:</b> closest rider, and waiting longest of the two closest. The rule is posted and your pool voted it.</div>
+            <div style="margin-top:auto;display:flex;gap:8px"><button type="button" data-act="accept" style="flex:1;background:#17120D;color:#EFE6D2;border:0;border-radius:8px;padding:15px;font-size:17px;font-weight:700;cursor:pointer">Accept</button><button type="button" data-act="pass" style="flex:1;background:transparent;border:2px solid #17120D;border-radius:8px;padding:15px;font-size:17px;font-weight:700;cursor:pointer">Pass</button></div>
+            <div style="font-size:12px;color:#554a3b">Passing has no score and no penalty.</div>
+          </div>
+        </div>
+        <div data-r="1" hidden style="display:flex;flex-direction:column;flex:1">
+          <div style="display:flex;flex-direction:column;gap:14px;flex:1">
+            <div style="font-weight:800;font-size:13px;letter-spacing:0.08em;color:#1F3FA8">ON THE WAY · ORDER #212</div>
+            <div style="font-size:19px;line-height:1.4">Collect at Amma Mess. Two bags, label on top.</div>
+            <button type="button" data-act="deliver" style="margin-top:auto;background:#1F3FA8;color:#EFE6D2;border:0;border-radius:8px;padding:15px;font-size:17px;font-weight:700;cursor:pointer">Mark delivered</button>
+          </div>
+        </div>
+        <div data-r="2" hidden style="display:flex;flex-direction:column;flex:1">
+          <div style="display:flex;flex-direction:column;gap:6px;flex:1">
+            <div style="font-weight:800;font-size:13px;letter-spacing:0.08em;color:#C8321E">TRIP RECEIPT</div>
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dotted #17120D"><span>Fare, paid by customer</span><b>₹70.00</b></div>
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dotted #17120D"><span>Mutual aid fund, 2%</span><b>−₹1.40</b></div>
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dotted #17120D"><span>Platform commission</span><b>₹0</b></div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:8px"><b>You received</b><b style="font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 75;font-weight:900;font-size:52px;line-height:1">₹68.60</b></div>
+            <div style="background:#1F3FA8;color:#EFE6D2;padding:12px;font-size:13px;line-height:1.45;margin-top:8px;border-radius:6px">Added to your work record: 21 Oct, 1 trip, 18 min, ₹68.60. Export it any time to show a bank, a landlord or a union.</div>
+            <button type="button" data-act="reset" style="margin-top:auto;align-self:flex-start;background:transparent;border:2px solid #17120D;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer">Replay</button>
+          </div>
+        </div>
+        <div data-r="3" hidden style="display:flex;flex-direction:column;flex:1">
+          <div style="display:flex;flex-direction:column;gap:12px;flex:1"><b style="font-size:22px">Offer passed on.</b><div style="line-height:1.45">Nothing recorded against you. Your place in the queue stays.</div><button type="button" data-act="reset" style="margin-top:auto;align-self:flex-start;background:transparent;border:2px solid #17120D;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer">Show offer again</button></div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:26px;max-width:620px">
+      <div style="font-weight:800;font-size:14px;letter-spacing:0.14em;text-transform:uppercase;color:#F0B21B">For the riders' co-op</div>
+      <h2 style="margin:0;font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 62;font-weight:900;text-transform:uppercase;font-size:clamp(60px,9vw,150px);line-height:0.84">Every trip on the record.</h2>
+      <p style="margin:0;font-size:20px;line-height:1.42;font-weight:500">Gig work is hard to organise because it is hard to prove. Here each ride makes a receipt and each receipt adds to a work history the rider holds.</p>
+      <div style="display:flex;flex-direction:column;font-size:17px;font-weight:500">
+        <div style="padding:12px 0;border-top:2px dashed #EFE6D2">Pay formula is posted. The pool votes to change it.</div>
+        <div style="padding:12px 0;border-top:2px dashed #EFE6D2">A written reason before anyone is removed, and a panel that answers.</div>
+        <div style="padding:12px 0;border-top:2px dashed #EFE6D2;border-bottom:2px dashed #EFE6D2">A small slice of each fare goes to a fund the riders run.</div>
+      </div>
+      <div style="font-size:15px;line-height:1.5;max-width:480px">With a record of earnings and hours, riders can enrol in welfare boards, get group cover and bargain as one body. That is the step towards registration.</div>
+    </div>
+  </div>
+</section>
+
+<section id="workers" data-screen-label="04 Kitchen workers" style="position:relative;background:#F0B21B;color:#17120D;padding:160px clamp(20px,5vw,72px) 170px;margin-top:-50px;clip-path:polygon(0 0,100% 60px,100% calc(100% - 40px),0 100%);overflow:hidden">
+  <div style="position:absolute;right:-2vw;top:70px;font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 50;font-weight:900;font-size:clamp(300px,42vw,720px);line-height:0.8;color:#DE9E0E">3</div>
+  <div style="position:relative;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:72px;align-items:center">
+    <div style="display:flex;flex-direction:column;gap:26px;max-width:620px">
+      <div style="font-weight:800;font-size:14px;letter-spacing:0.14em;text-transform:uppercase">For kitchen workers</div>
+      <h2 style="margin:0;font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 62;font-weight:900;text-transform:uppercase;font-size:clamp(60px,9vw,150px);line-height:0.84">A vote and a voice.</h2>
+      <p style="margin:0;font-size:20px;line-height:1.42;font-weight:500">Cooks, dishwashers and counter staff are members of the co-op too. They vote on the rules that touch their pay and hours, and they can raise a problem without the owner seeing who sent it.</p>
+      <div style="display:flex;flex-direction:column;font-size:17px;font-weight:500">
+        <div style="padding:12px 0;border-top:2px dashed #17120D">Each rule lists who is allowed to change it.</div>
+        <div style="padding:12px 0;border-top:2px dashed #17120D">Secret ballots. The result is public, the voter is not.</div>
+        <div style="padding:12px 0;border-top:2px dashed #17120D;border-bottom:2px dashed #17120D">Tips and wage records are logged per order.</div>
+      </div>
+      <div style="font-size:15px;line-height:1.5;max-width:480px">Kitchens, riders and staff each hold a third of the vote on shared matters. Pay and dispatch rules can only be changed by the people they apply to.</div>
+    </div>
+    <div style="display:flex;justify-content:center;position:relative">
+      <div style="position:absolute;left:-10px;top:-72px;font-family:'Caveat',cursive;font-size:32px;line-height:1;transform:rotate(-3deg);color:#C8321E">cast a ballot ↓</div>
+      <div style="position:relative;width:340px;max-width:100%;border:3px solid #17120D;border-radius:28px;background:#EFE6D2;color:#17120D;padding:20px 18px;display:flex;flex-direction:column;gap:14px;min-height:560px;transform:rotate(-1.5deg);box-shadow:0 26px 34px -10px rgba(0,0,0,0.45)">
+        <div style="position:absolute;top:-14px;left:40px;width:76px;height:26px;background:rgba(200,50,30,0.8);transform:rotate(-4deg)"></div>
+        <div style="font-weight:800;font-size:13px;letter-spacing:0.08em;color:#C8321E">PROPOSAL 7 · CLOSES FRIDAY</div>
+        <div style="font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 70;font-weight:900;text-transform:uppercase;font-size:34px;line-height:0.94">Log tips per order and pass them on in full.</div>
+        {% for c in classes %}<div class="bar" data-c="{{ c.name }}" style="display:flex;flex-direction:column;gap:4px"><div style="display:flex;justify-content:space-between;font-size:14px;font-weight:600"><span>{{ c.name }}</span><span class="cnt">{{ c.yes }} yes · {{ c.no }} no</span></div><div style="height:12px;background:#d9ccb2;border-radius:6px;overflow:hidden"><div class="fill" style="height:12px;width:{{ c.pct }}%;background:{{ c.color }}"></div></div></div>{% endfor %}
+        <div style="display:flex;justify-content:space-between;border-top:2px solid #17120D;padding-top:10px"><span>Weighted result</span><b><span id="weighted">{{ weighted }}</span>% yes</b></div>
+        <div data-v="open" style="display:flex;flex-direction:column;margin-top:auto">
+          <div style="display:flex;flex-direction:column;gap:8px;margin-top:auto"><div style="font-size:13px;color:#554a3b">You vote as kitchen staff. Secret ballot.</div><div style="display:flex;gap:8px"><button type="button" data-vote="yes" style="flex:1;background:#17120D;color:#EFE6D2;border:0;border-radius:8px;padding:14px;font-size:16px;font-weight:700;cursor:pointer">Yes</button><button type="button" data-vote="no" style="flex:1;background:transparent;border:2px solid #17120D;border-radius:8px;padding:14px;font-size:16px;font-weight:700;cursor:pointer">No</button></div></div>
+        </div>
+        <div data-v="done" hidden style="flex-direction:column;margin-top:auto">
+          <div style="display:flex;flex-direction:column;gap:8px;margin-top:auto"><div style="font-weight:700;color:#1F3FA8">Counted. It cannot be traced back to you.</div><button type="button" data-vote="reset" style="align-self:flex-start;background:transparent;border:2px solid #17120D;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer">Reset demo</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="core" data-screen-label="05 Shared core" style="padding:110px clamp(20px,5vw,72px) 90px;display:flex;flex-direction:column;gap:44px">
+  <div style="display:flex;flex-direction:column;gap:14px;max-width:1000px">
+    <div style="font-weight:800;font-size:14px;letter-spacing:0.14em;text-transform:uppercase;color:#C8321E">Under all three</div>
+    <h2 style="margin:0;font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 62;font-weight:900;text-transform:uppercase;font-size:clamp(56px,8vw,130px);line-height:0.85">One engine. Nobody in the middle.</h2>
+  </div>
+  <div style="max-width:880px;display:flex;flex-direction:column">
+    {% for c in core %}
+      <div style="padding:14px 0;border-top:2px solid #17120D;display:flex;flex-direction:column;gap:4px">
+        <div style="display:flex;align-items:baseline;gap:10px">
+          <div style="font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 75;font-weight:800;text-transform:uppercase;font-size:clamp(24px,3vw,36px);line-height:1">{{ c.name }}</div>
+          <div style="flex:1;border-bottom:3px dotted #17120D;transform:translateY(-6px);min-width:20px"></div>
+          <div style="font-weight:800;font-size:13px;letter-spacing:0.1em;white-space:nowrap;color:{{ c.color }};border:{{ c.border }};padding:3px 8px;border-radius:4px;transform:rotate({{ c.rot }}deg)">{{ c.tag }}</div>
+        </div>
+        <div style="font-size:16px;line-height:1.4;max-width:600px">{{ c.body }}</div>
+      </div>
+    {% endfor %}
+    <div style="border-top:2px solid #17120D"></div>
+  </div>
+  <div style="max-width:820px;display:flex;flex-direction:column;gap:10px">
+    <div style="font-family:'Caveat',cursive;font-size:34px;color:#C8321E;line-height:1">what it is not</div>
+    <div style="font-size:20px;line-height:1.45;font-weight:500">Not a marketplace. The directory is a list and each kitchen links to its own page. Not a cart that mixes restaurants. Not a way to take a cut. Food money goes to the kitchen, the fare goes to the rider, and the co-op charges flat fees.</div>
+  </div>
+</section>
+
+<section data-screen-label="06 Staircase" style="background:#17120D;color:#EFE6D2;padding:110px clamp(20px,5vw,72px) 120px;display:flex;flex-direction:column;gap:56px">
+  <h2 style="margin:0;font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 62;font-weight:900;text-transform:uppercase;font-size:clamp(52px,7.5vw,120px);line-height:0.86;max-width:1100px">From a kitchen leaving an app to workers who count.</h2>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:24px;align-items:start;padding-bottom:20px">
+    {% for s in steps %}
+      <div style="margin-top:{{ s.mt }}px;background:{{ s.bg }};color:{{ s.fg }};padding:22px 20px 26px;display:flex;flex-direction:column;gap:8px;border-radius:4px">
+        <div style="font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 50;font-weight:900;font-size:76px;line-height:0.8">{{ s.n }}</div>
+        <div style="font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 75;font-weight:800;text-transform:uppercase;font-size:28px;line-height:0.95">{{ s.title }}</div>
+        <div style="font-size:15px;line-height:1.45">{{ s.body }}</div>
+      </div>
+    {% endfor %}
+  </div>
+  <div style="font-size:17px;line-height:1.5;max-width:780px;border-top:2px dashed #EFE6D2;padding-top:22px">Rule for moving up a step: pilot riders earn at least what the apps paid them, measured from their own receipts. The number of kitchens signed up is not the test.</div>
+</section>
+
+<section id="about" data-screen-label="07 About" style="padding:110px clamp(20px,5vw,72px) 120px;display:flex;flex-direction:column;gap:44px">
+  <div style="display:flex;flex-wrap:wrap;gap:32px;justify-content:space-between;align-items:flex-end">
+    <div style="display:flex;flex-direction:column;gap:10px;max-width:900px">
+      <div style="font-family:'Caveat',cursive;font-size:34px;color:#C8321E;line-height:1">read it as a…</div>
+      <h2 style="margin:0;font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 62;font-weight:900;text-transform:uppercase;font-size:clamp(52px,7.5vw,120px);line-height:0.86">What this shows about me.</h2>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      {% for r in roles %}<button type="button" class="role" data-role="{{ loop.index0 }}" aria-pressed="{{ 'true' if loop.first else 'false' }}">{{ r }}</button>{% endfor %}
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:34px 26px;padding:10px 0">
+    {% for group in skills %}<div data-skills="{{ loop.index0 }}"{% if not loop.first %} hidden{% endif %} style="display:contents">{% for k in group %}
+      <div style="position:relative;background:#F7F0DE;padding:28px 22px 24px;display:flex;flex-direction:column;gap:8px;transform:rotate({{ rots[loop.index0] }}deg);box-shadow:0 14px 22px -10px rgba(40,25,5,0.45)">
+        <div style="position:absolute;top:-12px;left:50%;margin-left:-34px;width:68px;height:24px;background:rgba(240,178,27,0.8);transform:rotate({{ tapes[loop.index0] }}deg)"></div>
+        <div style="font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 75;font-weight:800;text-transform:uppercase;font-size:26px;line-height:0.98">{{ k.title }}</div>
+        <div style="font-size:15px;line-height:1.5">{{ k.body }}</div>
+      </div>
+    {% endfor %}</div>{% endfor %}
+  </div>
+  <div style="font-size:16px;line-height:1.7;font-weight:500">code: <a href="https://github.com/rahullath/commonplate" rel="noopener">github.com/rahullath/commonplate</a> · AGPL-3.0-or-later</div>
+</section>
+
+
+</main>
+<script>
+(function () {
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+  var KEEP = {{ keep | tojson }}, NOTES = {{ knotes | tojson }};
+  function show(list, attr, val) { list.forEach(function (el) { el.hidden = el.getAttribute(attr) !== String(val); }); }
+
+  // 1. kitchen: what you keep, via an app versus direct
+  $$('.seg').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var mode = b.dataset.k;
+      $$('.seg').forEach(function (o) { o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); });
+      show($$('[data-kpane]'), 'data-kpane', mode);
+      var k = $('#keep'); k.textContent = KEEP[mode].v; k.style.color = KEEP[mode].c;
+      $('#knote').textContent = NOTES[mode];
+    });
+  });
+
+  // 2. rider: offer, accept, deliver, receipt
+  var trips = 41;
+  function rider(n) { show($$('[data-r]'), 'data-r', n); $('#trips').textContent = trips; }
+  var R = { accept: function () { rider(1); }, pass: function () { rider(3); },
+            deliver: function () { trips = 42; rider(2); }, reset: function () { trips = 41; rider(0); } };
+  $$('[data-act]').forEach(function (b) { b.addEventListener('click', R[b.dataset.act]); });
+
+  // 3. worker ballot: weighted yes across three classes
+  var BASE = {{ ballot | tojson }}, vote = null;
+  function tally() {
+    var sum = 0;
+    $$('.bar').forEach(function (el) {
+      var c = el.dataset.c, yes = BASE[c][0], no = BASE[c][1];
+      if (c === 'Kitchen staff') { if (vote === 'yes') yes++; if (vote === 'no') no++; }
+      var pct = Math.round(100 * yes / (yes + no)); sum += pct;
+      $('.cnt', el).textContent = yes + ' yes · ' + no + ' no';
+      $('.fill', el).style.width = pct + '%';
+    });
+    $('#weighted').textContent = Math.round(sum / $$('.bar').length);
+    $$('[data-v]').forEach(function (el) { el.hidden = (el.dataset.v === 'done') !== !!vote; });
+  }
+  $$('[data-vote]').forEach(function (b) {
+    b.addEventListener('click', function () { vote = b.dataset.vote === 'reset' ? null : b.dataset.vote; tally(); });
+  });
+
+  // 4. about: pick a lens
+  $$('.role').forEach(function (b) {
+    b.addEventListener('click', function () {
+      $$('.role').forEach(function (o) { o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); });
+      show($$('[data-skills]'), 'data-skills', b.dataset.role);
+    });
+  });
+  tally();
+})();
+</script>
+</body>
+</html>
