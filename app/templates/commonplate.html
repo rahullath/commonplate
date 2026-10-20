@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>commonplate: open-source direct ordering for kitchens, riders and workers</title>
 <meta name="description" content="Small kitchens leave the delivery apps and sell direct. Riders get a receipt for every trip and a vote on the rules. Open-source (AGPL), no commission, no middleman.">
-<link rel="canonical" href="{{ site_url }}/commonplate">
+<link rel="canonical" href="{{ canonical }}">
 <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="commonplate">
 <meta property="og:title" content="commonplate: cook it, ride it, own it">
 <meta property="og:description" content="Open-source direct ordering for small kitchens, with transparent rider pay and worker votes. No commission, no middleman.">
-<meta property="og:url" content="{{ site_url }}/commonplate">
+<meta property="og:url" content="{{ canonical }}">
 <meta property="og:image" content="{{ site_url }}/static/logo.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#EFE6D2">
@@ -23,6 +23,10 @@
 <style>
 body{margin:0;background:#EFE6D2;color:#17120D;font-family:'Archivo',sans-serif;overflow-x:hidden}
 a{color:#C8321E}a:hover{color:#1F3FA8}button{font-family:inherit}*{box-sizing:border-box}
+.cta{display:inline-block;background:#17120D;color:#EFE6D2;padding:14px 24px;border-radius:8px;font-weight:700;font-size:17px;text-decoration:none;margin:0 10px 10px 0;border:2px solid #17120D}
+.cta:hover{background:#1F3FA8;border-color:#1F3FA8;color:#EFE6D2}
+.cta.red{background:#C8321E;border-color:#C8321E}.cta.red:hover{background:#1F3FA8;border-color:#1F3FA8}
+.cta.alt{background:transparent;color:#17120D}.cta.alt:hover{color:#EFE6D2}
 .seg{flex:1;border:0;padding:11px 6px;font-weight:700;cursor:pointer;background:transparent;color:#17120D}
 .seg[aria-pressed=true]{background:#17120D;color:#EFE6D2}
 .role{border:2.5px solid #17120D;border-radius:30px;padding:10px 20px;font-size:16px;font-weight:700;cursor:pointer;background:transparent;color:#17120D}
@@ -42,7 +46,7 @@ button:focus-visible,a:focus-visible{outline:3px solid #F0B21B;outline-offset:2p
 <section data-screen-label="01 Hero" style="position:relative;padding:24px clamp(20px,5vw,72px) 140px;display:flex;flex-direction:column;gap:40px">
   <div style="display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap">
     <div style="font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 80;font-weight:900;font-size:26px;text-transform:uppercase;letter-spacing:0.01em">commonplate</div>
-    <div style="display:flex;gap:18px;font-size:14px;font-weight:600"><a href="#kitchens" style="color:#17120D">Kitchens</a><a href="#riders" style="color:#17120D">Riders</a><a href="#workers" style="color:#17120D">Kitchen workers</a><a href="#core" style="color:#17120D">The core</a><a href="#about" style="color:#17120D">About me</a></div>
+    <div style="display:flex;gap:18px;font-size:14px;font-weight:600"><a href="#kitchens" style="color:#17120D">Kitchens</a><a href="#riders" style="color:#17120D">Riders</a><a href="#workers" style="color:#17120D">Kitchen workers</a><a href="#core" style="color:#17120D">The core</a><a href="#try" style="color:#17120D">Try it</a><a href="{{ demo_url }}" target="_blank" rel="noopener" style="color:#C8321E">Live demo &#8599;</a><a href="#about" style="color:#17120D">About me</a></div>
   </div>
   <div style="position:relative;padding-top:8px">
     <h1 style="margin:0;font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 62;font-weight:900;text-transform:uppercase;font-size:clamp(72px,17vw,280px);line-height:0.82;letter-spacing:-0.01em">
@@ -56,6 +60,12 @@ button:focus-visible,a:focus-visible{outline:3px solid #F0B21B;outline-offset:2p
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:32px;align-items:end;max-width:1100px">
     <p style="margin:0;font-size:clamp(19px,2vw,25px);line-height:1.38;text-wrap:pretty;font-weight:500">Small kitchens leave the delivery apps and sell direct. Their riders stop being invisible. Every trip is written down, paid in the open and counted, and that record is what lets informal workers organise and be recognised.</p>
     <div style="font-family:'Caveat',cursive;font-size:30px;line-height:1.05;color:#C8321E;transform:rotate(-2deg)">three ways in, one shared engine. scroll. all numbers are sample data.</div>
+  </div>
+  <div style="max-width:1100px">
+    <a class="cta red" href="{{ demo_url }}" target="_blank" rel="noopener">See a live kitchen &rarr;</a>
+    <a class="cta" href="/menu">Try the sample kitchen</a>
+    <a class="cta alt" href="/guide">Deploy your own</a>
+    <a class="cta alt" href="{{ repo }}" rel="noopener">Read the code</a>
   </div>
 </section>
 
@@ -216,6 +226,38 @@ button:focus-visible,a:focus-visible{outline:3px solid #F0B21B;outline-offset:2p
   <div style="font-size:17px;line-height:1.5;max-width:780px;border-top:2px dashed #EFE6D2;padding-top:22px">Rule for moving up a step: pilot riders earn at least what the apps paid them, measured from their own receipts. The number of kitchens signed up is not the test.</div>
 </section>
 
+<section id="try" data-screen-label="06b Try it" style="padding:110px clamp(20px,5vw,72px) 100px;display:flex;flex-direction:column;gap:36px;background:#F7F0DE">
+  <div style="display:flex;flex-direction:column;gap:14px;max-width:1000px">
+    <div style="font-weight:800;font-size:14px;letter-spacing:0.14em;text-transform:uppercase;color:#C8321E">Try it, then run it</div>
+    <h2 style="margin:0;font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 62;font-weight:900;text-transform:uppercase;font-size:clamp(52px,7.5vw,120px);line-height:0.86">Order something. Then own the kitchen.</h2>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px;max-width:1100px">
+    <div style="border:3px solid #17120D;border-radius:12px;padding:22px;background:#EFE6D2;display:flex;flex-direction:column;gap:10px">
+      <b style="font-size:13px;letter-spacing:.1em;color:#C8321E">1 · REAL KITCHEN</b>
+      <div style="font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 75;font-weight:800;text-transform:uppercase;font-size:28px;line-height:.98">See it live</div>
+      <p style="margin:0;font-size:15px;line-height:1.5">A working kitchen running this exact code: menu, cart, UPI or cash checkout, tracking.</p>
+      <a href="{{ demo_url }}" target="_blank" rel="noopener" style="font-weight:700;margin-top:auto">{{ demo_url.split('//')[1] }} &rarr;</a>
+    </div>
+    <div style="border:3px solid #17120D;border-radius:12px;padding:22px;background:#EFE6D2;display:flex;flex-direction:column;gap:10px">
+      <b style="font-size:13px;letter-spacing:.1em;color:#1F3FA8">2 · SANDBOX</b>
+      <div style="font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 75;font-weight:800;text-transform:uppercase;font-size:28px;line-height:.98">Poke the sample</div>
+      <p style="margin:0;font-size:15px;line-height:1.5">A sample kitchen runs on this site. Browse the menu and cart. Nothing here is saved.</p>
+      <a href="/menu" style="font-weight:700;margin-top:auto">Open the sample menu &rarr;</a>
+    </div>
+    <div style="border:3px solid #17120D;border-radius:12px;padding:22px;background:#EFE6D2;display:flex;flex-direction:column;gap:10px">
+      <b style="font-size:13px;letter-spacing:.1em;color:#17120D">3 · YOURS</b>
+      <div style="font-family:'Anybody',sans-serif;font-variation-settings:'wdth' 75;font-weight:800;text-transform:uppercase;font-size:28px;line-height:.98">Deploy your own</div>
+      <p style="margin:0;font-size:15px;line-height:1.5">One Docker image, one SQLite file. Set your name, phone and menu and you are taking orders.</p>
+      <a href="/guide" style="font-weight:700;margin-top:auto">Read the deploy guide &rarr;</a>
+    </div>
+  </div>
+  <pre style="margin:0;max-width:760px;background:#17120D;color:#EFE6D2;padding:16px 18px;border-radius:8px;overflow-x:auto;font-size:14px;line-height:1.5"><code>git clone {{ repo }}
+cd commonplate
+pip install -r requirements.txt
+uvicorn app.main:app</code></pre>
+  <p style="margin:0;font-size:17px;line-height:1.5;max-width:760px">Not sure it fits your kitchen, or want help setting it up? Email <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.</p>
+</section>
+
 <section id="about" data-screen-label="07 About" style="padding:110px clamp(20px,5vw,72px) 120px;display:flex;flex-direction:column;gap:44px">
   <div style="display:flex;flex-wrap:wrap;gap:32px;justify-content:space-between;align-items:flex-end">
     <div style="display:flex;flex-direction:column;gap:10px;max-width:900px">
@@ -235,7 +277,7 @@ button:focus-visible,a:focus-visible{outline:3px solid #F0B21B;outline-offset:2p
       </div>
     {% endfor %}</div>{% endfor %}
   </div>
-  <div style="font-size:16px;line-height:1.7;font-weight:500">code: <a href="https://github.com/rahullath/commonplate" rel="noopener">github.com/rahullath/commonplate</a> · AGPL-3.0-or-later</div>
+  <div style="font-size:16px;line-height:1.7;font-weight:500">code: <a href="{{ repo }}" rel="noopener">github.com/rahullath/commonplate</a> · AGPL-3.0-or-later · live kitchen: <a href="{{ demo_url }}" rel="noopener">{{ demo_url.split('//')[1] }}</a> · <a href="mailto:{{ contact_email }}">{{ contact_email }}</a></div>
 </section>
 
 

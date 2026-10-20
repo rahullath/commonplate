@@ -78,8 +78,10 @@ ROTS = [-1.8, 1.2, -0.8]
 TAPES = [-5, 4, -3]
 
 
-def page_context(site_url: str) -> dict:
+def page_context(site_url: str, canonical_path: str = "/commonplate") -> dict:
     return {
+        "canonical": f"{site_url}{canonical_path}", "demo_url": DEMO_URL,
+        "contact_email": CONTACT_EMAIL, "repo": SITE_REPO,
         "klines": KLINES, "keep": KEEP, "knotes": KNOTES, "classes": CLASSES, "weighted": WEIGHTED,
         "ballot": BALLOT, "core": CORE, "steps": STEPS, "roles": ROLES, "skills": SKILLS,
         "rots": ROTS, "tapes": TAPES,
@@ -89,7 +91,7 @@ def page_context(site_url: str) -> dict:
             "name": "commonplate",
             "description": "Open-source direct ordering for small kitchens, with transparent rider pay and worker votes.",
             "codeRepository": SITE_REPO,
-            "url": f"{site_url}/commonplate",
+            "url": f"{site_url}{canonical_path}",
             "programmingLanguage": "Python",
             "runtimePlatform": "FastAPI, Jinja2, SQLite",
             "license": "https://www.gnu.org/licenses/agpl-3.0.html",

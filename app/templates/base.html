@@ -8,7 +8,7 @@
   <title>{{ biz.name }}</title>
   {% endblock %}
   {% block canonical %}{% endblock %}
-  {% block robots %}<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">{% endblock %}
+  {% block robots %}{% if on_vercel %}<meta name="robots" content="noindex, follow">{% else %}<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">{% endif %}{% endblock %}
   {% block social %}
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="{{ biz.name }}">

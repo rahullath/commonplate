@@ -27,7 +27,13 @@ class Business:
     name = _env("NAME", "Sample Kitchen")
     instagram = _env("INSTAGRAM", "")
     email = _env("EMAIL", "hello@example.com")
-    site_url = _env("SITE_URL", "https://example.com").rstrip("/")
+    site_url = _env(
+        "SITE_URL",
+        # Vercel provides the production hostname; without this every canonical
+        # and sitemap entry on a Vercel deploy would point at example.com.
+        f"https://{os.environ['VERCEL_PROJECT_PRODUCTION_URL']}" if os.environ.get("VERCEL_PROJECT_PRODUCTION_URL")
+        else "https://example.com",
+    ).rstrip("/")
     service_areas = [a.strip() for a in _env("SERVICE_AREAS", "").split(",") if a.strip()]
     google_site_verification = _env("GOOGLE_SITE_VERIFICATION", "")
     bing_site_verification = _env("BING_SITE_VERIFICATION", "")

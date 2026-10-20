@@ -67,6 +67,7 @@ templates.env.globals["wa_order_display"] = WHATSAPP_ORDER_DISPLAY
 from .business import business as biz  # noqa: E402
 templates.env.globals["biz"] = biz
 templates.env.globals["site_url"] = biz.site_url
+templates.env.globals["on_vercel"] = ON_VERCEL
 from .config import DELIVERY_RADIUS_KM, DELIVERY_WINDOWS  # noqa: E402
 templates.env.globals["radius_km"] = f"{DELIVERY_RADIUS_KM:g}"
 # {"lunch": {"text": "12:00 – 2:30 PM", "to": "12:00 to 2:30 PM"}, ...}
@@ -242,9 +243,10 @@ def guide_page(request: Request):
 @app.get("/", response_class=HTMLResponse)
 def landing_page(request: Request):
     if ON_VERCEL:
-        # A Vercel deployment can't keep orders (ephemeral disk), so the front
-        # door explains that and points at the demo and the real hosting options.
-        return _guide_response(request)
+        # A Vercel deployment can't keep orders (ephemeral disk), so its front
+        # door is the project page: what commonplate is, a live demo, how to deploy.
+        return templates.TemplateResponse(request, "commonplate.html",
+                                          marketing.page_context(SITE_URL, "/"))
     photos = dish_photo_ids()
     picks = []
     for item_id, tag, desc in TODAYS_PICKS:
@@ -752,7 +754,8 @@ def about_page(request: Request):
 @app.get("/commonplate", response_class=HTMLResponse)
 def commonplate_page(request: Request):
     """Project page: what commonplate is, for kitchens, riders and workers."""
-    return templates.TemplateResponse(request, "commonplate.html", marketing.page_context(SITE_URL))
+    return templates.TemplateResponse(request, "commonplate.html",
+                                      marketing.page_context(SITE_URL, "/" if ON_VERCEL else "/commonplate"))
 
 
 @app.get("/updates", response_class=HTMLResponse)
@@ -1041,6 +1044,8 @@ def sitemap_xml():
         and "{" not in route.path
         and route.path not in SITEMAP_EXCLUDE
     })
+    if ON_VERCEL:
+        paths = ["/", "/guide"]
     entries = []
     for path in paths:
         lastmod_tag = ""
@@ -1054,6 +1059,10 @@ def sitemap_xml():
         if mtimes:
             lastmod_tag = f"\n    <lastmod>{date.fromtimestamp(max(mtimes)).isoformat()}</lastmod>"
         entries.append(f"  <url>\n    <loc>{SITE_URL}{path}</loc>{lastmod_tag}\n  </url>")
+    if ON_VERCEL:
+        return Response(content='<?xml version="1.0" encoding="UTF-8"?>\n'
+                        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+                        + "\n".join(entries) + "\n</urlset>", media_type="application/xml")
     menu_mtime = (Path("data/menu.json")).stat().st_mtime
     menu_items = [m for m in menu.load_menu() if not m["id"].endswith(menu.HALF_SUFFIX)]
     for m in menu_items:
