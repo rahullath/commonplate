@@ -200,7 +200,7 @@ ADMIN_PHONE = os.environ.get("ADMIN_PHONE", "")
 SITE_URL = os.environ.get("SITE_URL", _biz.site_url)
 
 # Google Business Profile "ask for review" short link
-GOOGLE_REVIEW_LINK = "https://g.page/r/CbCaykOYyQTPEAE/review"
+GOOGLE_REVIEW_LINK = os.environ.get("GOOGLE_REVIEW_LINK", "")
 
 # Google Places API (New) — server-side key, optional; live rating/review
 # count on /about. Cached server-side (see app/reviews.py) so this stays

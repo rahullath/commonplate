@@ -3,6 +3,7 @@
 <meta name="description" content="My orders — {{ biz.name }}. See your recent orders and their live status on this device, or look up by phone number if you're on a new one.">
 <title>My Orders | {{ biz.name }}</title>
 {% endblock %}
+{% block robots %}<meta name="robots" content="noindex, follow">{% endblock %}
 {% block canonical %}<link rel="canonical" href="{{ site_url }}/track">{% endblock %}
 {% block fonts %}
 <link rel="preconnect" href="https://fonts.googleapis.com">

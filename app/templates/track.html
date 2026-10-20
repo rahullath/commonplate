@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% set hide_wa = true %}
+{% block robots %}<meta name="robots" content="noindex, nofollow">{% endblock %}
 {% block meta %}
 <meta name="description" content="Track your {{ biz.name }} order: live status, estimated arrival, payment and price breakdown.">
 <title>Order #{{ order_id }} · {{ biz.name }}</title>

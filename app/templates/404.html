@@ -3,6 +3,7 @@
 <meta name="description" content="That page doesn't exist — but your order is safe. Head back to the {{ biz.name }} menu, or track an order you already placed.">
 <title>Page Not Found | {{ biz.name }}</title>
 {% endblock %}
+{% block robots %}<meta name="robots" content="noindex, follow">{% endblock %}
 {% block canonical %}<link rel="canonical" href="{{ site_url }}/404">{% endblock %}
 {% block fonts %}
 <link rel="preconnect" href="https://fonts.googleapis.com">

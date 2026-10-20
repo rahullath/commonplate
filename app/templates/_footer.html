@@ -7,7 +7,7 @@
 <footer class="footer">
   <div class="footer-in">
     <div class="f-brand"><img src="/static/logo.png" alt=""><span>{{ biz.name }}</span></div>
-    <p class="f-meta">{{ biz.address }}<br>Mon–Sat 9 AM–9 PM · Sun 11 AM–9 PM</p>
+    <p class="f-meta">{{ biz.address }}<br>{{ biz.hours }}</p>
     <div class="f-contact">
       <a href="tel:{{ biz.phone_e164 }}">{{ biz.phone_display }}</a>
       <a href="{{ wa_order_link('Hi') }}" rel="noopener">WhatsApp {{ wa_order_display }}</a>

@@ -583,6 +583,8 @@ def _on_feedback_tap(sess: dict, t: str) -> list[dict]:
     db.set_feedback(oid, rating.lower())
     if rating == "GOOD":
         sess["state"] = "root"
+        if not GOOGLE_REVIEW_LINK:
+            return [text("That made the kitchen's day, thank you! 🙏")]
         return [text("That made the kitchen's day, thank you! 🙏"),
                 {"type": "cta", "text": "If you have 20 seconds, a Google review helps a small family "
                                         "kitchen more than anything.",

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% set hide_wa = true %}
+{% block social %}{% endblock %}
 {% block meta %}
 <meta name="description" content="{{ item_description }}{% if aliases %} Also called {{ aliases[:3] | join(', ') }}.{% endif %} ₹{{ item.price }}, Order online, no platform fees.">
 <title>{{ item.name }}{% if aliases %} ({{ aliases[0] }}){% endif %} Price ₹{{ item.price }} · Order Online | {{ biz.name }}</title>

@@ -8,6 +8,20 @@
   <title>{{ biz.name }}</title>
   {% endblock %}
   {% block canonical %}{% endblock %}
+  {% block robots %}<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">{% endblock %}
+  {% block social %}
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{{ biz.name }}">
+  <meta property="og:locale" content="en_IN">
+  <meta property="og:title" content="{{ biz.name }} · {{ biz.tagline }}">
+  <meta property="og:description" content="{{ biz.tagline }}. Order direct for delivery or pickup, no platform fees.">
+  <meta property="og:image" content="{{ site_url }}/static/logo.png">
+  <meta name="twitter:card" content="summary_large_image">
+  {% endblock %}
+  {% if biz.google_site_verification %}<meta name="google-site-verification" content="{{ biz.google_site_verification }}">{% endif %}
+  {% if biz.bing_site_verification %}<meta name="msvalidate.01" content="{{ biz.bing_site_verification }}">{% endif %}
+  {% if biz.facebook_domain_verification %}<meta name="facebook-domain-verification" content="{{ biz.facebook_domain_verification }}">{% endif %}
+  <link rel="alternate" type="application/rss+xml" title="{{ biz.name }} updates" href="/updates.xml">
   <link rel="icon" type="image/png" href="/static/logo.png">
   <link rel="manifest" href="/static/manifest.json">
   <meta name="theme-color" content="#0E7A45">
@@ -15,14 +29,15 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="{{ biz.name }}">
-  <!-- Google tag (gtag.js) -->
+  {% if biz.ga_measurement_id %}
+  <script async src="https://www.googletagmanager.com/gtag/js?id={{ biz.ga_measurement_id }}"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
-
-    
+    gtag('config', '{{ biz.ga_measurement_id }}');
   </script>
+  {% endif %}
   {% block fonts %}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

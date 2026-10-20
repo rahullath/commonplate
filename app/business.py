@@ -29,6 +29,10 @@ class Business:
     email = _env("EMAIL", "hello@example.com")
     site_url = _env("SITE_URL", "https://example.com").rstrip("/")
     service_areas = [a.strip() for a in _env("SERVICE_AREAS", "").split(",") if a.strip()]
+    google_site_verification = _env("GOOGLE_SITE_VERIFICATION", "")
+    bing_site_verification = _env("BING_SITE_VERIFICATION", "")
+    facebook_domain_verification = _env("FACEBOOK_DOMAIN_VERIFICATION", "")
+    ga_measurement_id = _env("GA_MEASUREMENT_ID", "")
     tagline = _env("TAGLINE", "Home-style food, cooked to order")
     about = _env("ABOUT", "Tell customers who you are and how you cook. Set BIZ_ABOUT, or edit app/templates/about.html.")
 

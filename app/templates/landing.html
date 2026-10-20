@@ -3,6 +3,17 @@
 <meta name="description" content="Order direct from {{ biz.name }}: no aggregator commission, straight to the kitchen.">
 <title>{{ biz.name }} · Order direct</title>
 {% endblock %}
+{% block social %}
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="{{ biz.name }}">
+<meta property="og:locale" content="en_IN">
+<meta property="og:title" content="{{ biz.name }} · Order direct">
+<meta property="og:description" content="{{ biz.tagline }}. Order direct for delivery or pickup, no platform fees.">
+<meta property="og:url" content="{{ site_url }}/">
+<meta property="og:image" content="{{ site_url }}/static/logo.png">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">{{ ld_graph | tojson }}</script>
+{% endblock %}
 {% block canonical %}<link rel="canonical" href="{{ site_url }}/">{% endblock %}
 {% block body %}
 <main class="page" style="max-width:900px;margin:0 auto;padding:40px 18px;">

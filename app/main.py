@@ -237,17 +237,95 @@ def landing_page(request: Request):
             picks.append({**item, "tag": tag, "desc": desc, "has_photo": item_id in photos})
         if len(picks) == 4:
             break
+    if len(picks) < 4:
+        have = {p["id"] for p in picks}
+        for m in menu.load_menu():
+            if len(picks) == 4:
+                break
+            if (m.get("popular") and m["id"] not in have and not m["id"].endswith(menu.HALF_SUFFIX)
+                    and menu.is_available(m["id"])):
+                picks.append({**m, "tag": None, "desc": (m.get("description") or "").strip("[]"),
+                              "has_photo": m["id"] in photos})
     google_stats = reviews.get_platform_stats().get("google")
     prices = [it["price"] for it in menu.load_menu() if isinstance(it.get("price"), (int, float))]
     price_range = (min(prices), max(prices)) if prices else (60, 350)
+    faq_list = faqs.landing_faqs(DELIVERY_ZONES, FREE_DELIVERY_ABOVE, price_range, bool(UPI_VPA))
     return templates.TemplateResponse(
         request, "landing.html",
-        {"picks": picks, "google_stats": google_stats, "google_review_link": GOOGLE_REVIEW_LINK,
-         "faqs": faqs.landing_faqs(DELIVERY_ZONES, FREE_DELIVERY_ABOVE, price_range, bool(UPI_VPA)),
+        {"picks": picks, "ld_graph": build_home_schema(faq_list), "google_stats": google_stats, "google_review_link": GOOGLE_REVIEW_LINK,
+         "faqs": faq_list,
          "categories": all_categories(), "latest_updates": load_updates()[:3],
          "area_served": [{"@type": "Place", "name": f"{a}, {biz.city}"}
                          for a in seo_aliases.NEARBY_AREAS]},
     )
+
+
+def build_home_schema(faq_list: list[dict]) -> dict:
+    """One @graph for the home page: the Restaurant (the entity Google puts in
+    the local pack and knowledge panel), the WebSite, and the FAQ block the
+    page shows. Only facts the page itself states; nothing invented (no
+    aggregateRating: the home page does not display one)."""
+    def _hours(days, span):
+        return {"@type": "OpeningHoursSpecification", "dayOfWeek": days,
+                "opens": _to_24h(span[0]), "closes": _to_24h(span[1])}
+    restaurant = {
+        "@type": "Restaurant",
+        "@id": f"{SITE_URL}/#restaurant",
+        "name": biz.name,
+        "description": f"{biz.tagline}. Order direct for delivery or pickup, no platform fees.",
+        "url": f"{SITE_URL}/",
+        "image": f"{SITE_URL}/static/logo.png",
+        "logo": f"{SITE_URL}/static/logo.png",
+        "telephone": biz.phone_e164,
+        "email": biz.email,
+        "servesCuisine": sorted({m["group"] for m in menu.load_menu() if m.get("group")})[:6],
+        "priceRange": "₹",
+        "menu": f"{SITE_URL}/menu",
+        "acceptsReservations": False,
+        "hasMenu": f"{SITE_URL}/menu",
+        "address": {"@type": "PostalAddress", "streetAddress": biz.street_address,
+                    "addressLocality": biz.city, "addressRegion": biz.state,
+                    "postalCode": biz.pincode, "addressCountry": biz.country},
+        "geo": {"@type": "GeoCoordinates", "latitude": PICKUP_LAT, "longitude": PICKUP_LNG},
+        "openingHoursSpecification": [
+            _hours(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"], biz.hours_mon_sat),
+            _hours(["Sunday"], biz.hours_sunday),
+        ],
+        "potentialAction": {"@type": "OrderAction",
+                            "target": {"@type": "EntryPoint", "urlTemplate": f"{SITE_URL}/menu",
+                                       "actionPlatform": ["http://schema.org/DesktopWebPlatform",
+                                                          "http://schema.org/MobileWebPlatform"]},
+                            "deliveryMethod": ["http://purl.org/goodrelations/v1#DeliveryModeOwnFleet",
+                                               "http://purl.org/goodrelations/v1#DeliveryModePickUp"]},
+    }
+    if biz.service_areas:
+        restaurant["areaServed"] = [{"@type": "Place", "name": f"{a}, {biz.city}"} for a in biz.service_areas]
+    same_as = [u for u in (f"https://instagram.com/{biz.instagram.lstrip('@')}" if biz.instagram else "",
+                           GOOGLE_REVIEW_LINK) if u]
+    if same_as:
+        restaurant["sameAs"] = same_as
+    graph = [
+        restaurant,
+        {"@type": "WebSite", "@id": f"{SITE_URL}/#website", "url": f"{SITE_URL}/",
+         "name": biz.name, "inLanguage": "en", "publisher": {"@id": f"{SITE_URL}/#restaurant"}},
+    ]
+    if faq_list:
+        graph.append({"@type": "FAQPage",
+                      "mainEntity": [{"@type": "Question", "name": f["q"],
+                                      "acceptedAnswer": {"@type": "Answer", "text": f["a"]}}
+                                     for f in faq_list]})
+    return {"@context": "https://schema.org", "@graph": graph}
+
+
+def _to_24h(t: str) -> str:
+    """'9 AM' / '9:30 PM' -> '09:00' / '21:30' (schema.org wants 24h)."""
+    m = re.match(r"\s*(\d{1,2})(?::(\d{2}))?\s*([AaPp])", t or "")
+    if not m:
+        return "00:00"
+    h, mi = int(m.group(1)) % 12, int(m.group(2) or 0)
+    if m.group(3).lower() == "p":
+        h += 12
+    return f"{h:02d}:{mi:02d}"
 
 
 def build_menu_schema(groups: list[dict]) -> dict:
@@ -284,12 +362,6 @@ def build_menu_schema(groups: list[dict]) -> dict:
             for g in groups
         ],
     }
-
-
-@app.get("/mxt0vtchhifb4bxbj27i4aw1em76ra.html", response_class=PlainTextResponse)
-def facebook_domain_verification():
-    # Meta Business (Facebook) domain ownership verification HTML file.
-    return PlainTextResponse("mxt0vtchhifb4bxbj27i4aw1em76ra")
 
 
 @app.get("/o/{token}")
@@ -661,27 +733,6 @@ def about_page(request: Request):
     )
 
 
-RECOMMENDED_DISHES = [
-    ("north-indian-thali", "Bestseller"),
-    ("chola-bhatura", "Must try"),
-    ("paneer-butter-masala", "Trending"),
-    ("pav-bhaji", None),
-    ("sabudana-vada-2pcs", None),
-    ("dal-makhani", None),
-]
-
-
-@app.get("/bio", response_class=HTMLResponse)
-def bio_page(request: Request):
-    photos = dish_photo_ids()
-    recommendations = []
-    for item_id, tag in RECOMMENDED_DISHES:
-        item = menu.get_item(item_id)
-        if item:
-            recommendations.append({**item, "tag": tag, "has_photo": item_id in photos})
-    return templates.TemplateResponse(request, "bio.html", {"recommendations": recommendations, "categories": all_categories()})
-
-
 @app.get("/updates", response_class=HTMLResponse)
 def updates_page(request: Request):
     """Fresh from the Kitchen — compilation of Instagram/WhatsApp posts and
@@ -821,12 +872,6 @@ def whatsapp_catalog_csv():
 SITE_URL = biz.site_url
 
 
-@app.get("/googlee69732d81b8747c7.html", response_class=PlainTextResponse)
-def google_site_verification():
-    # Google Search Console domain ownership verification (HTML file method).
-    return PlainTextResponse("google-site-verification: googlee69732d81b8747c7.html")
-
-
 @app.get("/sw.js")
 def service_worker():
     """Served at the root, not /static/sw.js — a service worker's default
@@ -843,10 +888,10 @@ def robots_txt():
         "Disallow: /admin",
         "Disallow: /kitchen",
         "Disallow: /api/",
-        "Disallow: /f",
         "Disallow: /order-actions",
         "Disallow: /o/",
         "Disallow: /pay/",
+        "Disallow: /track/",
         "",
         f"Sitemap: {SITE_URL}/sitemap.xml",
     ]
@@ -928,7 +973,7 @@ def llms_txt():
 
 
 # Paths that render HTML but shouldn't be in the public sitemap.
-SITEMAP_EXCLUDE = {"/admin", "/kitchen"}
+SITEMAP_EXCLUDE = {"/admin", "/kitchen", "/404", "/track"}
 
 # Optional path -> template file, just to attach a real <lastmod>. A page
 # missing here still appears in the sitemap (via route auto-discovery below),
@@ -939,7 +984,6 @@ SITEMAP_TEMPLATES = {
     "/menu": "menu.html",
     "/delivery": "delivery.html",
     "/about": "about.html",
-    "/bio": "bio.html",
     "/privacy-policy": "privacy.html",
     "/refund-cancellation-policy": "refund-cancellation-policy.html",
     "/track": "track-landing.html",
