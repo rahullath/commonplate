@@ -191,6 +191,38 @@ body { background: var(--dark); color: #fff; padding-bottom: calc(96px + env(saf
 .more-rows { justify-content: center; color: var(--dim); font-weight: 700; }
 .paystrip { width: 100%; margin-top: 10px; border: 0; background: var(--amberbar); color: #2B1D00; font-weight: 800; font-size: 15px; border-radius: 14px; padding: 12px 14px; min-height: 48px; text-align: left; }
 .bbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 12; background: var(--dark); border-top: 1px solid #2A2E26; padding: 10px 16px calc(12px + env(safe-area-inset-bottom, 0px)); display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; max-width: 600px; margin: 0 auto; }
+.bbar.four { grid-template-columns: repeat(4, 1fr); }
+.bbar.four button { font-size: 14px; padding: 0 2px; }
+.bbar button.shut { background: #7A2417; }
+.shutstrip { width: 100%; margin-top: 10px; border: 0; background: #7A2417; color: #fff; font-weight: 800; font-size: 15px; border-radius: 14px; padding: 12px 14px; min-height: 48px; text-align: left; }
+.shop { padding-bottom: 110px; }
+.sh-state { font-size: 20px; font-weight: 800; margin: 4px 0 10px; }
+.sh-sub { color: var(--dim); font-size: 14px; margin: 6px 0 12px; }
+.sh-card { background: var(--dark2); border-radius: 16px; padding: 14px; display: grid; gap: 10px; }
+.sh-in { width: 100%; border: 1px solid #3A3F36; background: #1E211B; color: #fff; border-radius: 12px; padding: 14px; font-size: 17px; }
+.sh-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.sh-b { border: 0; border-radius: 14px; background: var(--dark2); color: #fff; padding: 15px 8px; font-size: 16px; font-weight: 700; min-height: 56px; }
+.sh-chk { display: flex; align-items: center; gap: 10px; font-size: 16px; }
+.sh-chk input { width: 22px; height: 22px; }
+.sh-list { margin-top: 10px; display: grid; gap: 8px; }
+.sh-row { display: flex; align-items: center; gap: 8px; background: var(--dark2); border-radius: 14px; padding: 10px 12px; }
+.sh-row.off { opacity: .7; }
+.sh-n { flex: 1; font-weight: 700; min-width: 0; }
+.sh-n span { display: block; color: var(--dim); font-weight: 500; font-size: 13px; }
+.sh-t { border: 0; border-radius: 999px; padding: 10px 14px; font-weight: 800; font-size: 14px; min-width: 88px; min-height: 44px; }
+.sh-t.on { background: #1B7F3B; color: #fff; }
+.sh-t.so { background: #7A2417; color: #fff; }
+.sh-x { border: 1px solid #5A5F55; background: transparent; color: #fff; border-radius: 999px; padding: 8px 10px; font-size: 13px; min-height: 40px; }
+.sh-p { border: 1px solid #5A5F55; background: transparent; color: #fff; border-radius: 999px; padding: 10px 12px; font-weight: 800; font-size: 15px; min-height: 44px; white-space: nowrap; }
+.chg { color: var(--amberbar); }
+.sh-edit { background: var(--dark2); border-radius: 14px; padding: 14px; display: grid; gap: 10px; border: 2px solid var(--amberbar); }
+.sh-l { display: grid; gap: 6px; font-size: 14px; color: var(--dim); }
+.sh-b.save { background: #1B7F3B; }
+.sh-x.wide { width: 100%; min-height: 48px; font-size: 15px; }
+.sh-ch { padding: 6px 0; font-size: 15px; border-top: 1px solid #3A3F36; }
+.sh-ch:first-child { border-top: 0; }
+.sh-ch span { display: block; color: var(--dim); font-size: 12px; }
+.sh-link { display: block; background: var(--dark2); border-radius: 14px; padding: 16px; color: #fff; text-decoration: none; font-weight: 700; }
 .bbar button { height: 52px; border: 0; border-radius: 14px; background: var(--dark2); color: #fff; font-size: 16px; font-weight: 700; }
 .newban { position: sticky; top: 0; z-index: 14; margin: 10px 12px 0; background: var(--amberbar); color: var(--ink); border-radius: 18px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; box-shadow: 0 12px 28px rgba(0,0,0,.45); }
 .nb-t { flex: 1; min-width: 0; }

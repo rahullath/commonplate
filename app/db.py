@@ -5,7 +5,7 @@ Availability is keyed by (date, item_id) with available=1/0.
 """
 import json
 import sqlite3
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from .config import DB_FILE
@@ -235,6 +235,39 @@ def _migrate(conn: sqlite3.Connection) -> None:
         "    reason        TEXT,"
         "    turn_on_time  TEXT,"
         "    updated_at    TEXT DEFAULT (datetime('now'))"
+        ")"
+    )
+    # Dishes the kitchen adds by hand (not in menu.json, not on the POS).
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS custom_items ("
+        "    id          TEXT PRIMARY KEY,"
+        "    name        TEXT NOT NULL,"
+        "    price       REAL NOT NULL,"
+        "    description TEXT,"
+        "    day         TEXT,"           # ISO date it is offered on; NULL = until removed
+        "    sold_out    INTEGER NOT NULL DEFAULT 0,"
+        "    active      INTEGER NOT NULL DEFAULT 1,"
+        "    created_at  TEXT DEFAULT (datetime('now'))"
+        ")"
+    )
+    # Prices the kitchen changed from the screen. menu.json stays the base; this wins over it.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS price_overrides ("
+        "    item_id    TEXT PRIMARY KEY,"
+        "    price      REAL,"
+        "    half_price REAL,"
+        "    updated_at TEXT DEFAULT (datetime('now'))"
+        ")"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS price_changes ("
+        "    id        INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "    item_id   TEXT NOT NULL,"
+        "    name      TEXT,"
+        "    old_price REAL,"
+        "    new_price REAL,"
+        "    kind      TEXT,"            # price | half
+        "    at        TEXT DEFAULT (datetime('now'))"
         ")"
     )
     # daily_specials table (may not exist in older databases)
@@ -597,13 +630,34 @@ def update_order_petpooja(order_id: int, petpooja_order_id: str) -> None:
 
 # ---- store status (Petpooja "Update Store Status" push target) ----
 
+_IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def _parse_reopen(value: str | None) -> datetime | None:
+    """turn_on_time as an aware datetime. Ours is ISO ('2026-10-18T06:00', IST);
+    Petpooja's may be 'YYYY-MM-DD HH:MM:SS'. Anything else is ignored."""
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value).strip().replace(" ", "T"))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=_IST)
+
+
 def get_store_status() -> dict:
     conn = get_conn()
     row = conn.execute("SELECT is_open, reason, turn_on_time FROM store_status WHERE id=1").fetchone()
     conn.close()
     if not row:
         return {"is_open": True, "reason": None, "turn_on_time": None}
-    return {"is_open": bool(row["is_open"]), "reason": row["reason"], "turn_on_time": row["turn_on_time"]}
+    status = {"is_open": bool(row["is_open"]), "reason": row["reason"], "turn_on_time": row["turn_on_time"]}
+    if not status["is_open"]:
+        back = _parse_reopen(status["turn_on_time"])
+        if back and datetime.now(_IST) >= back:
+            set_store_status(True)
+            return {"is_open": True, "reason": None, "turn_on_time": None}
+    return status
 
 
 def set_store_status(is_open: bool, reason: str | None = None, turn_on_time: str | None = None) -> None:
@@ -952,3 +1006,100 @@ def get_relay(wamid: str | None) -> dict | None:
     row = conn.execute("SELECT * FROM wa_relay WHERE wamid=?", (wamid,)).fetchone()
     conn.close()
     return dict(row) if row else None
+
+
+# ---- custom items (added by hand from the kitchen screen) ----
+
+def _custom_row(r) -> dict:
+    return {"id": r["id"], "name": r["name"], "price": r["price"], "description": r["description"] or "",
+            "day": r["day"], "sold_out": bool(r["sold_out"])}
+
+
+def list_custom_items(day: str | None = None) -> list[dict]:
+    """Items on offer on `day` (today's one-day items plus ones with no end date)."""
+    conn = get_conn()
+    if day:
+        rows = conn.execute(
+            "SELECT * FROM custom_items WHERE active=1 AND (day IS NULL OR day=?) ORDER BY created_at, id", (day,)
+        ).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM custom_items WHERE active=1 ORDER BY created_at, id").fetchall()
+    conn.close()
+    return [_custom_row(r) for r in rows]
+
+
+def get_custom_item(item_id: str) -> dict | None:
+    conn = get_conn()
+    r = conn.execute("SELECT * FROM custom_items WHERE id=? AND active=1", (item_id,)).fetchone()
+    conn.close()
+    return _custom_row(r) if r else None
+
+
+def save_custom_item(item_id: str, name: str, price: float, description: str = "",
+                     day: str | None = None) -> None:
+    """Create, or update in place if the id exists (so re-adding never clashes)."""
+    conn = get_conn()
+    conn.execute(
+        "INSERT INTO custom_items(id, name, price, description, day, sold_out, active) VALUES(?,?,?,?,?,0,1) "
+        "ON CONFLICT(id) DO UPDATE SET name=excluded.name, price=excluded.price, "
+        "description=excluded.description, day=excluded.day, sold_out=0, active=1",
+        (item_id, name, price, description, day),
+    )
+    conn.commit()
+    conn.close()
+
+
+def set_custom_sold_out(item_id: str, sold_out: bool) -> bool:
+    conn = get_conn()
+    n = conn.execute("UPDATE custom_items SET sold_out=? WHERE id=? AND active=1",
+                     (1 if sold_out else 0, item_id)).rowcount
+    conn.commit()
+    conn.close()
+    return bool(n)
+
+
+def remove_custom_item(item_id: str) -> bool:
+    conn = get_conn()
+    n = conn.execute("UPDATE custom_items SET active=0 WHERE id=?", (item_id,)).rowcount
+    conn.commit()
+    conn.close()
+    return bool(n)
+
+
+# ---- price changes from the kitchen screen ----
+
+def get_price_overrides() -> dict[str, dict]:
+    conn = get_conn()
+    rows = conn.execute("SELECT item_id, price, half_price FROM price_overrides").fetchall()
+    conn.close()
+    return {r["item_id"]: {"price": r["price"], "half_price": r["half_price"]} for r in rows}
+
+
+def set_price_override(item_id: str, price: float | None, half_price: float | None) -> None:
+    """Store the override; both None removes it (back to the menu.json price)."""
+    conn = get_conn()
+    if price is None and half_price is None:
+        conn.execute("DELETE FROM price_overrides WHERE item_id=?", (item_id,))
+    else:
+        conn.execute(
+            "INSERT INTO price_overrides(item_id, price, half_price) VALUES(?,?,?) "
+            "ON CONFLICT(item_id) DO UPDATE SET price=excluded.price, half_price=excluded.half_price, "
+            "updated_at=datetime('now')", (item_id, price, half_price))
+    conn.commit()
+    conn.close()
+
+
+def log_price_change(item_id: str, name: str, old: float | None, new: float | None, kind: str) -> None:
+    conn = get_conn()
+    conn.execute("INSERT INTO price_changes(item_id, name, old_price, new_price, kind) VALUES(?,?,?,?,?)",
+                 (item_id, name, old, new, kind))
+    conn.commit()
+    conn.close()
+
+
+def recent_price_changes(limit: int = 15) -> list[dict]:
+    conn = get_conn()
+    rows = conn.execute("SELECT item_id, name, old_price, new_price, kind, at FROM price_changes "
+                        "ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]

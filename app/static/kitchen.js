@@ -7,6 +7,8 @@
   const app = document.getElementById("app");
   let token = null, data = null, tab = "now", seen = null, soundOn = false, audio = null;
   let view = "home", focusOid = null, showMore = false;  // home | together | focus | later | done
+  let shopItems = null, shopChanges = [], shopQ = "", editId = null;  // Shop tab: dishes (loaded when opened) and the search text
+  const shopDraft = { name: "", price: "", reason: "", onlyToday: true };
   const plated = new Set();  // "Cook together" ticks, kept until reload
   const drafts = {};  // per-order Porter link/fare typed but not yet sent
   // /kitchen/o/46 (the Open order button on the owner's WhatsApp alert) jumps to #46.
@@ -142,6 +144,9 @@
       </div></header>`;
   }
 
+  const offPos = (o) => (o.items || []).some((i) => String(i.item_id || "").startsWith("sp-"));
+  const offPosNote = (o) => offPos(o) ? `<div class="nu-note">⭐ Has a special that is not on Petpooja. Ring it up on the POS yourself.</div>` : "";
+
   function nextUpCard(o) {
     const note = (o.instructions || "").trim();
     const itemNotes = (o.items || []).filter((i) => i.note).map((i) => `${esc(i.name)}: ${esc(i.note)}`);
@@ -151,6 +156,7 @@
       <div class="nu-h" style="background:${color}"><span>#${o.id} · ${{ new: "NEW", preparing: "COOKING", ready: "READY", out_for_delivery: "ON THE WAY" }[o.status]}</span><span>${o.order_type === "pickup" ? "PICKUP" : "DELIVERY"}</span></div>
       <div class="nu-b">
         <div class="nu-items">${(o.items || []).map((i) => `${num(i.qty)} × ${esc(i.name)}`).join("<br>")}</div>
+        ${offPosNote(o)}
         ${note || itemNotes.length ? `<div class="nu-note">${[esc(note), ...itemNotes].filter(Boolean).join("<br>")}</div>` : ""}
         <div class="nu-meta">${esc(meta)}</div>
         ${payNow(o)}
@@ -159,12 +165,21 @@
       </div></article>`;
   }
 
+  function closedStrip() {
+    const st = data && data.store;
+    if (!st || st.is_open) return "";
+    const back = st.turn_on_time ? new Date(String(st.turn_on_time).includes("T") ? st.turn_on_time + "+05:30" : st.turn_on_time.replace(" ", "T") + "+05:30") : null;
+    const when = back && !isNaN(back) ? ` Opens again ${day(back)} ${time(back)}.` : " Stays closed until you open it.";
+    return `<button class="shutstrip" data-view="shop">🔴 Online orders are OFF.${when} Tap to change.</button>`;
+  }
+
   function homeView(g) {
     const q = queue(), top = q[0];
-    if (!top) return `${banner(q)}<main class="list"><div class="empty">No orders right now.<br>New ones appear here by themselves.</div></main>${bottomBar(g)}`;
+    if (!top) return `${banner(q)}${closedStrip()}<main class="list"><div class="empty">No orders right now.<br>New ones appear here by themselves.</div></main>${bottomBar(g)}`;
     const rest = q.slice(1), shown = showMore ? rest : rest.slice(0, 2);
     const unpaid = rest.filter(needsMoney);
     return `${banner(q)}<main class="home">
+      ${closedStrip()}
       ${unpaid.length ? `<button class="paystrip" data-open="${unpaid[0].id}">💰 ${unpaid.length} other payment${unpaid.length > 1 ? "s" : ""} to check. Tap to open #${unpaid[0].id}.</button>` : ""}
       <div class="lane">DO THIS NEXT</div>${nextUpCard(top)}
       ${rest.length ? `<div class="lane dim">THEN</div><div class="rows">${shown.map((o) => `<button class="rowc" data-open="${o.id}">
@@ -174,7 +189,8 @@
       </main>${bottomBar(g)}`;
   }
   function bottomBar(g) {
-    return `<div class="bbar"><button data-view="together">Cook together</button><button data-view="later">Later (${g.later.length})</button><button data-view="done">Done (${g.done.length})</button></div>`;
+    const closed = data && data.store && !data.store.is_open;
+    return `<div class="bbar four"><button data-view="together">Cook together</button><button data-view="later">Later (${g.later.length})</button><button data-view="done">Done (${g.done.length})</button><button data-view="shop" class="${closed ? "shut" : ""}">${closed ? "🔴 Closed" : "Shop"}</button></div>`;
   }
 
   // Same dish across every active order, as a prep list.
@@ -195,6 +211,61 @@
       </main>`;
   }
 
+  function priceEditor(d) {
+    return `<div class="sh-edit"><div class="sh-n">${esc(d.name)}<span>Base price ${rs(d.original)}${d.original_half ? ` · half ${rs(d.original_half)}` : ""}</span></div>
+      <label class="sh-l">Price<input class="sh-in" id="pe-price" inputmode="decimal" value="${d.price}"></label>
+      ${d.half ? `<label class="sh-l">Half portion<input class="sh-in" id="pe-half" inputmode="decimal" value="${d.half}"></label>` : ""}
+      <div class="sh-btns"><button class="sh-b" data-pe="cancel">Cancel</button><button class="sh-b save" data-pe="save" data-id="${esc(d.id)}">Save price</button></div>
+      ${d.price !== d.original || (d.half && d.half !== d.original_half) ? `<button class="sh-x wide" data-pe="reset" data-id="${esc(d.id)}">Back to ${rs(d.original)}</button>` : ""}
+    </div>`;
+  }
+
+  function shopView() {
+    const st = (data && data.store) || { is_open: true };
+    const back = st.turn_on_time ? new Date(String(st.turn_on_time).includes("T") ? st.turn_on_time + "+05:30" : st.turn_on_time.replace(" ", "T") + "+05:30") : null;
+    const status = st.is_open
+      ? `<div class="sh-state on">🟢 Taking online orders</div>
+         <input class="sh-in" data-shop="reason" placeholder="Message for customers (optional)" value="${esc(shopDraft.reason)}">
+         <div class="sh-btns">
+           <button class="sh-b" data-close="hours:1">Close for 1 hour</button>
+           <button class="sh-b" data-close="hours:2">Close for 2 hours</button>
+           <button class="sh-b" data-close="today">Close for today</button>
+           <button class="sh-b" data-close="manual">Close until I open</button>
+         </div>`
+      : `<div class="sh-state off">🔴 Online orders are OFF</div>
+         <div class="sh-sub">${esc((st.reason || "").replace(/([^.!?])$/, "$1."))}${back && !isNaN(back) ? ` Opens again ${day(back)} ${time(back)}.` : ""}</div>
+         <button class="big" data-open-shop="1">Open the shop now</button>`;
+    const q = shopQ.trim().toLowerCase();
+    const list = (shopItems || []).filter((d) => !q || d.name.toLowerCase().includes(q));
+    const rows = shopItems === null ? `<div class="sh-sub">Loading dishes…</div>` : list.length ? list.slice(0, 80).map((d) => d.id === editId ? priceEditor(d) : `<div class="sh-row ${d.available ? "" : "off"}">
+        <div class="sh-n">${d.custom ? "⭐ " : ""}${esc(d.name)}<span>${d.reason ? esc(d.reason) : (d.price !== d.original ? `<b class="chg">changed</b> was ${rs(d.original)}` : "")}</span></div>
+        ${d.custom ? `<button class="sh-x" data-rm="${esc(d.id)}">Remove</button>` : `<button class="sh-p" data-edit="${esc(d.id)}">${rs(d.price)} ✎</button>`}
+        ${d.reason ? "" : `<button class="sh-t ${d.available ? "on" : "so"}" data-so="${esc(d.id)}" data-now="${d.available ? 1 : 0}">${d.available ? "On" : "Sold out"}</button>`}
+      </div>`).join("") + (list.length > 80 ? `<div class="sh-sub">Showing 80. Type to search.</div>` : "") : `<div class="sh-sub">No dish matches.</div>`;
+    const changes = shopChanges.length ? `<div class="lane">PRICE CHANGES</div><div class="sh-card">${shopChanges.slice(0, 8).map((c) => `<div class="sh-ch">${esc(c.name)}${c.kind === "half" ? " (half)" : ""}: ${rs(c.old_price)} → <b>${rs(c.new_price)}</b><span>${day(utc(c.at))} ${time(utc(c.at))}</span></div>`).join("")}</div>` : "";
+    return `<main class="home shop">
+      <div class="lane">ONLINE ORDERS</div>${status}
+      <div class="lane">ADD A SPECIAL</div>
+      <div class="sh-card">
+        <input class="sh-in" data-shop="name" placeholder="Dish name, e.g. Mango Lassi" value="${esc(shopDraft.name)}">
+        <input class="sh-in" data-shop="price" inputmode="decimal" placeholder="Price in rupees" value="${esc(shopDraft.price)}">
+        <label class="sh-chk"><input type="checkbox" data-shop="onlyToday" ${shopDraft.onlyToday ? "checked" : ""}> Only today</label>
+        <button class="big" id="addspecial">Put on the menu</button>
+        <div class="sh-sub">Customers can order it right away. It does not go to Petpooja, so ring it up on the POS yourself.</div>
+      </div>
+      <div class="lane">TODAY'S MENU</div>
+      <input class="sh-in" data-shop="q" placeholder="Search a dish to mark sold out" value="${esc(shopQ)}">
+      <div class="sh-list">${rows}</div>
+      ${changes}
+      <div class="lane">MORE</div>
+      <a class="sh-link" href="/admin" target="_blank" rel="noopener">Reviews, discount codes and WhatsApp numbers ›</a>
+    </main>`;
+  }
+  async function loadShop() {
+    try { const r = await api("/api/admin/menu-lite"); shopItems = r.items; shopChanges = r.changes || []; } catch (e) { if (e.message !== "auth") toast("Couldn't load the menu."); shopItems = shopItems || []; }
+    if (view === "shop") render();
+  }
+
   function render() {
     const g = groups();
     const keepScroll = window.scrollY;
@@ -204,7 +275,8 @@
       if (!o) { view = "home"; return render(); }
       const lbl = { new: "NEW", preparing: "COOKING", ready: "READY", out_for_delivery: "ON THE WAY", delivered: "DELIVERED", cancelled: "CANCELLED" }[o.status] || o.status;
       body = topbar(g, `#${o.id} · ${lbl}`, true) + banner(queue()) + `<main class="list">${card(o)}</main>`;
-    } else if (view === "together") body = topbar(g, "Cook together", true) + banner(queue()) + togetherView(g);
+    } else if (view === "shop") body = topbar(g, "Shop", true) + shopView();
+    else if (view === "together") body = topbar(g, "Cook together", true) + banner(queue()) + togetherView(g);
     else if (view === "later" || view === "done") {
       const list = g[view];
       body = topbar(g, view === "later" ? "Later" : "Done today", true) + banner(queue()) +
@@ -372,6 +444,7 @@
       <div class="sec cust"><div><b>${esc(o.customer_name || "Customer")}</b><div class="ph">${prettyPhone(o.customer_phone)}</div></div>
         <div class="cbtns"><a href="tel:+${waNum(o.customer_phone)}">📞 Call</a><a href="https://wa.me/${waNum(o.customer_phone)}" target="_blank" rel="noopener">WhatsApp</a></div></div>
       <div class="sec"><ul class="items">${(o.items || []).map((i) => `<li><span class="q">${num(i.qty)}×</span><span>${esc(i.name)}</span></li>`).join("")}</ul>
+        ${offPos(o) ? `<div class="note">⭐ Has a special that is not on Petpooja. Ring it up on the POS yourself.</div>` : ""}
         ${note || itemNotes.length ? `<div class="note">📝 ${[esc(note), ...itemNotes].filter(Boolean).join("<br>")}</div>` : ""}</div>
       ${o.feedback ? `<div class="sec"><span class="pill ${o.feedback.rating === "bad" ? "p-cancelled" : o.feedback.rating === "good" ? "p-preparing" : "p-new"}">${{ good: "😋 Loved it", ok: "🙂 It was okay", bad: "😕 Not great" }[o.feedback.rating] || ""}</span>${o.feedback.comment ? `<div class="note" style="margin-top:8px">“${esc(o.feedback.comment)}”</div>` : ""}</div>` : ""}
       ${porterSec(o)}
@@ -387,7 +460,43 @@
     if (pa) pa.onclick = () => { const o = groups().now.find(needsMoney); const el = o && document.getElementById("o-" + o.id); if (el) { el.scrollIntoView({ block: "start", behavior: "smooth" }); window.scrollBy(0, -150); el.classList.add("flash"); } };
     const go = (v, id) => { view = v; focusOid = id || null; render(); window.scrollTo(0, 0); };
     const bk = document.getElementById("back"); if (bk) bk.onclick = () => go("home");
-    app.querySelectorAll("[data-view]").forEach((b) => b.onclick = () => go(b.dataset.view));
+    app.querySelectorAll("[data-view]").forEach((b) => b.onclick = () => { go(b.dataset.view); if (b.dataset.view === "shop") loadShop(); });
+    app.querySelectorAll("[data-shop]").forEach((i) => i.oninput = () => {
+      const k = i.dataset.shop;
+      if (k === "onlyToday") shopDraft.onlyToday = i.checked; else if (k === "q") { shopQ = i.value; const pos = i.selectionStart; render(); const n = app.querySelector('[data-shop="q"]'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } } else shopDraft[k] = i.value;
+    });
+    app.querySelectorAll("[data-close]").forEach((b) => b.onclick = () => {
+      const [mode, h] = b.dataset.close.split(":");
+      act(b, () => api("/api/admin/store", { method: "POST", body: JSON.stringify({ is_open: false, mode, hours: h ? +h : null, reason: shopDraft.reason }) }).then((r) => { shopDraft.reason = ""; if (data) data.store = r; }),
+        "Online orders are off.");
+    });
+    app.querySelectorAll("[data-open-shop]").forEach((b) => b.onclick = () => act(b, () => api("/api/admin/store", { method: "POST", body: JSON.stringify({ is_open: true }) }).then((r) => { if (data) data.store = r; }), "Online orders are back on."));
+    const sp = document.getElementById("addspecial");
+    if (sp) sp.onclick = () => {
+      const price = parseFloat(shopDraft.price);
+      if (!shopDraft.name.trim()) { toast("Type the dish name."); return; }
+      if (!(price > 0)) { toast("Type the price in rupees."); return; }
+      act(sp, () => api("/api/admin/custom-items", { method: "POST", body: JSON.stringify({ name: shopDraft.name, price, only_today: shopDraft.onlyToday }) }).then(async () => { shopDraft.name = ""; shopDraft.price = ""; await loadShop(); }),
+        "Added. Customers can order it now.");
+    };
+    app.querySelectorAll("[data-so]").forEach((b) => b.onclick = () => act(b, () => api("/api/admin/sold-out", { method: "POST", body: JSON.stringify({ item_id: b.dataset.so, sold_out: b.dataset.now === "1" }) }).then(loadShop),
+      b.dataset.now === "1" ? "Marked sold out." : "Back on the menu."));
+    app.querySelectorAll("[data-edit]").forEach((b) => b.onclick = () => { editId = b.dataset.edit; render(); const i = document.getElementById("pe-price"); if (i) { i.focus(); i.select(); } });
+    app.querySelectorAll("[data-pe]").forEach((b) => b.onclick = () => {
+      const id = b.dataset.id, d = (shopItems || []).find((x) => x.id === (id || editId));
+      if (b.dataset.pe === "cancel") { editId = null; render(); return; }
+      if (b.dataset.pe === "reset") {
+        act(b, () => api("/api/admin/prices/" + encodeURIComponent(id), { method: "DELETE" }).then(async () => { editId = null; await loadShop(); }), "Back to the original price.");
+        return;
+      }
+      const price = parseFloat(document.getElementById("pe-price").value);
+      const hEl = document.getElementById("pe-half"), half = hEl ? parseFloat(hEl.value) : null;
+      if (!(price > 0) || (hEl && !(half > 0))) { toast("Type the price in rupees."); return; }
+      if (price === d.price && (!hEl || half === d.half)) { editId = null; render(); return; }
+      if (!confirm(`Change ${d.name} from ${rs(d.price)} to ${rs(price)}${hEl && half !== d.half ? ` (half ${rs(half)})` : ""}? Customers see it right away.`)) return;
+      act(b, () => api("/api/admin/prices", { method: "POST", body: JSON.stringify({ item_id: id, price, half_price: hEl ? half : null }) }).then(async () => { editId = null; await loadShop(); }), "Price changed.");
+    });
+    app.querySelectorAll("[data-rm]").forEach((b) => b.onclick = () => act(b, () => api("/api/admin/custom-items/" + encodeURIComponent(b.dataset.rm), { method: "DELETE" }).then(loadShop), "Removed."));
     app.querySelectorAll("[data-open]").forEach((b) => b.onclick = () => go("focus", +b.dataset.open));
     const sm = document.getElementById("showmore"); if (sm) sm.onclick = () => { showMore = true; render(); };
     app.querySelectorAll("[data-plate]").forEach((b) => b.onclick = () => { const k = b.dataset.plate; plated.has(k) ? plated.delete(k) : plated.add(k); render(); });
@@ -449,7 +558,7 @@
       else toast(`Order #${focusId} isn't open any more.`);
       focusId = null;
     }
-    const typing = document.activeElement && document.activeElement.matches("input[data-draft]");
+    const typing = document.activeElement && document.activeElement.matches("input[data-draft], input[data-shop], #pe-price, #pe-half");
     if (!typing) render();
     if (newOnes.length) {
       // One chime. The banner (render) shows the order; nothing takes over the screen.

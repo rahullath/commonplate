@@ -23,6 +23,15 @@
     </div>
     <h1 class="mh-title">Today's menu</h1>
   </header>
+  <div id="closed-banner" role="status" hidden style="margin:12px 16px 0;padding:12px 14px;border-radius:12px;background:#FBF0DE;color:#7A4A05;font-weight:600;font-size:15px;line-height:1.4"></div>
+  <script>
+    fetch("/api/store-status").then(function (r) { return r.json(); }).then(function (s) {
+      if (s.is_open) return;
+      var b = document.getElementById("closed-banner");
+      b.textContent = s.reason || "We're closed for online orders right now.";
+      b.hidden = false;
+    }).catch(function () {});
+  </script>
 
   <nav class="group-nav" id="group-nav">
     <a href="#" class="chip active" data-group="all">Popular</a>

@@ -402,10 +402,14 @@ def create_order(phone: str, name: str, order_type: str, items: list[dict],
     petpooja_info: dict = {}
     try:
         from .petpooja.client import is_configured, save_order as petpooja_save_order
-        if is_configured():
+        order_row = db.get_order(oid) if is_configured() else None
+        if order_row and any(menu.is_custom(i["item_id"] or "") for i in order_row["items"]):
+            # A dish added by hand isn't on the POS, and the POS must never be
+            # sent a line it doesn't know. The kitchen screen flags the order.
+            petpooja_info = {"petpooja_skipped": "order has a dish that is not on the POS"}
+        elif order_row:
             from .config import SITE_URL
             from .petpooja.config import PETPOOJA_WEBHOOK_TOKEN
-            order_row = db.get_order(oid)
             callback_url = f"{SITE_URL}/webhook/petpooja/order-callback?t={PETPOOJA_WEBHOOK_TOKEN}"
             result = petpooja_save_order(order_row, callback_url, GST_RATE)
             db.update_order_petpooja(oid, result["petpooja_order_id"])

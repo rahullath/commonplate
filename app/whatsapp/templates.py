@@ -41,7 +41,7 @@ DELIVERED = "order_delivered"
 DELIVERED_RATE = "order_delivered_rate"
 # Delivered + one-tap feedback (quick replies send FB:<good|ok|bad>:<order id>).
 FEEDBACK = "order_feedback"
-FEEDBACK_CHOICES = [("good", "😋 Loved it"), ("ok", "🙂 It was okay"), ("bad", "😕 Not great")]
+FEEDBACK_CHOICES = [("good", "Loved it"), ("ok", "It was okay"), ("bad", "Not great")]  # Meta rejects emoji in button text
 # Our templates Meta has put in a paid category other than UTILITY (it did this
 # to kitchen_alert). Filled by sync(); notify skips these for customers.
 NOT_UTILITY: set[str] = set()

@@ -1,0 +1,84 @@
+{
+  "_meta": {
+    "note": "Sample menu. Replace with your own items."
+  },
+  "display_groups": [
+    "Mains",
+    "Sides",
+    "Drinks"
+  ],
+  "items": [
+    {
+      "id": "sample-thali",
+      "name": "Sample Thali",
+      "category": "Mains",
+      "group": "Mains",
+      "price": 220,
+      "avg_price": 220,
+      "popular": true,
+      "qty_2mo": 0,
+      "revenue_2mo": 0,
+      "description": "[Rice + Dal + Vegetable + Flatbread + Sweet]"
+    },
+    {
+      "id": "sample-curry",
+      "name": "Sample Curry",
+      "category": "Mains",
+      "group": "Mains",
+      "price": 160,
+      "avg_price": 160,
+      "popular": true,
+      "qty_2mo": 0,
+      "revenue_2mo": 0,
+      "description": "[Seasonal vegetables in a spiced gravy]"
+    },
+    {
+      "id": "sample-flatbread",
+      "name": "Sample Flatbread",
+      "category": "Mains",
+      "group": "Mains",
+      "price": 40,
+      "avg_price": 40,
+      "popular": false,
+      "qty_2mo": 0,
+      "revenue_2mo": 0,
+      "description": "[Freshly made]"
+    },
+    {
+      "id": "sample-salad",
+      "name": "Sample Salad",
+      "category": "Sides",
+      "group": "Sides",
+      "price": 80,
+      "avg_price": 80,
+      "popular": false,
+      "qty_2mo": 0,
+      "revenue_2mo": 0,
+      "description": "[Seasonal vegetables]"
+    },
+    {
+      "id": "sample-chai",
+      "name": "Sample Chai",
+      "category": "Drinks",
+      "group": "Drinks",
+      "price": 30,
+      "avg_price": 30,
+      "popular": true,
+      "qty_2mo": 0,
+      "revenue_2mo": 0,
+      "description": "[Hot milk tea]"
+    },
+    {
+      "id": "sample-lassi",
+      "name": "Sample Lassi",
+      "category": "Drinks",
+      "group": "Drinks",
+      "price": 70,
+      "avg_price": 70,
+      "popular": false,
+      "qty_2mo": 0,
+      "revenue_2mo": 0,
+      "description": "[Chilled yoghurt drink]"
+    }
+  ]
+}

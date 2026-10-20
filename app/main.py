@@ -1,7 +1,7 @@
 import json
 import logging
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote
 
@@ -767,7 +767,7 @@ def admin_kitchen(x_admin_token: str | None = Header(None)):
         o["pay_url"] = f"{SITE_URL}/pay/{o.get('tracking_token') or o['id']}"
         o["feedback"] = db.get_feedback(o["id"])
         out.append(o)
-    return {"orders": out, "kitchen": {
+    return {"orders": out, "store": db.get_store_status(), "kitchen": {
         "address": PICKUP_ADDRESS, "phone": PICKUP_PHONE, "lat": PICKUP_LAT, "lng": PICKUP_LNG,
         "zones": DELIVERY_ZONES}}
 
@@ -1076,6 +1076,186 @@ def admin_repeat_yesterday(x_admin_token: str | None = Header(None)):
     today = date.today().isoformat()
     n = db.copy_availability(last, today)
     return {"ok": True, "copied_from": last, "copied_items": n}
+
+
+# ---- shop open/closed, sold-out and hand-added dishes (kitchen screen) ----
+
+_IST = timezone(timedelta(hours=5, minutes=30))
+
+
+class StoreIn(BaseModel):
+    is_open: bool
+    mode: str = "manual"          # today | hours | manual (only when closing)
+    hours: float | None = None
+    reason: str | None = None
+
+
+@app.get("/api/store-status")
+def public_store_status():
+    s = db.get_store_status()
+    return {"is_open": s["is_open"], "reason": s["reason"], "turn_on_time": s["turn_on_time"]}
+
+
+@app.post("/api/admin/store")
+def admin_set_store(body: StoreIn, x_admin_token: str | None = Header(None)):
+    _check_admin(x_admin_token)
+    if body.is_open:
+        db.set_store_status(True)
+        return db.get_store_status()
+    back = None
+    now = datetime.now(_IST)
+    if body.mode == "today":
+        back = (now + timedelta(days=1)).replace(hour=6, minute=0, second=0, microsecond=0)
+    elif body.mode == "hours":
+        h = body.hours or 0
+        if not 0 < h <= 24 * 7:
+            raise HTTPException(400, "Choose how long to close for")
+        back = now + timedelta(hours=h)
+    reason = (body.reason or "").strip()[:160] or "We're closed for online orders right now."
+    db.set_store_status(False, reason=reason, turn_on_time=back.strftime("%Y-%m-%dT%H:%M") if back else None)
+    return db.get_store_status()
+
+
+@app.get("/api/admin/menu-lite")
+def admin_menu_lite(x_admin_token: str | None = Header(None)):
+    """Everything the kitchen's Menu tab needs: per dish, is it on or sold out today."""
+    _check_admin(x_admin_token)
+    base = {m["id"]: m for m in menu.base_menu()}
+    out = []
+    for g in menu.grouped():
+        for it in g["items"]:
+            if it["id"].endswith(menu.HALF_SUFFIX):
+                continue
+            b = base.get(it["id"], {})
+            full = menu.get_item(it["id"]) or it
+            out.append({"id": it["id"], "name": it["name"], "group": g["group"], "price": it["price"],
+                        "original": b.get("price", it["price"]),
+                        "half": full.get("half_price"), "original_half": b.get("half_price"),
+                        "available": it["available"], "custom": bool(it.get("custom")),
+                        "reason": it.get("unavailable_reason")})
+    return {"items": out, "changes": db.recent_price_changes()}
+
+
+class PriceIn(BaseModel):
+    item_id: str
+    price: float
+    half_price: float | None = None
+
+
+def _check_price(v: float) -> float:
+    if not 0 < v <= 5000:
+        raise HTTPException(400, "Enter a price in rupees")
+    return round(v, 2)
+
+
+@app.post("/api/admin/prices")
+def admin_set_price(body: PriceIn, x_admin_token: str | None = Header(None)):
+    """Change a dish's price from the kitchen screen. menu.json stays the base;
+    the change is stored separately, logged, and can be reset to the base price."""
+    _check_admin(x_admin_token)
+    base = next((m for m in menu.base_menu() if m["id"] == body.item_id), None)
+    if not base:
+        raise HTTPException(404, "Unknown dish (specials are changed by adding them again)")
+    price = _check_price(body.price)
+    half = _check_price(body.half_price) if body.half_price is not None and base.get("half_price") else None
+    cur = menu.get_item(body.item_id) or base
+    old_price, old_half = cur["price"], cur.get("half_price")
+    db.set_price_override(
+        body.item_id,
+        None if price == base["price"] else price,
+        None if half is None or half == base.get("half_price") else half)
+    if price != old_price:
+        db.log_price_change(body.item_id, base["name"], old_price, price, "price")
+    if half is not None and half != old_half:
+        db.log_price_change(body.item_id, base["name"], old_half, half, "half")
+    if price != old_price or (half is not None and half != old_half):
+        _tell_owner_price(base["name"], old_price, price, old_half, half)
+    return {"ok": True, "price": price, "half_price": half}
+
+
+@app.delete("/api/admin/prices/{item_id}")
+def admin_reset_price(item_id: str, x_admin_token: str | None = Header(None)):
+    _check_admin(x_admin_token)
+    base = next((m for m in menu.base_menu() if m["id"] == item_id), None)
+    if not base:
+        raise HTTPException(404, "Unknown dish")
+    cur = menu.get_item(item_id) or base
+    db.set_price_override(item_id, None, None)
+    if cur["price"] != base["price"]:
+        db.log_price_change(item_id, base["name"], cur["price"], base["price"], "price")
+        _tell_owner_price(base["name"], cur["price"], base["price"], None, None)
+    return {"ok": True, "price": base["price"]}
+
+
+def _tell_owner_price(name: str, old: float, new: float, old_half, new_half) -> None:
+    """Heads-up to the owner's Telegram so a price change never goes unseen."""
+    try:
+        from . import telegram
+        if telegram.enabled():
+            from html import escape
+            line = f"Price changed on the kitchen screen: {name} ₹{old:g} → ₹{new:g}"
+            if new_half is not None and new_half != old_half:
+                line += f" (half ₹{old_half:g} → ₹{new_half:g})"
+            telegram.send_message(escape(line))
+    except Exception:
+        pass
+
+
+class SoldOutIn(BaseModel):
+    item_id: str
+    sold_out: bool
+
+
+@app.post("/api/admin/sold-out")
+def admin_sold_out(body: SoldOutIn, x_admin_token: str | None = Header(None)):
+    _check_admin(x_admin_token)
+    if menu.is_custom(body.item_id):
+        if not db.set_custom_sold_out(body.item_id, body.sold_out):
+            raise HTTPException(404, "Unknown dish")
+        return {"ok": True}
+    base = menu.get_item(body.item_id)
+    if not base:
+        raise HTTPException(404, "Unknown dish")
+    day = menu.today()
+    if not db.get_available_ids(day):
+        # Nothing saved yet means "everything is on". Save that explicitly first.
+        db.set_availability(day, [m["id"] for m in menu.load_menu() if m["id"] != body.item_id], [])
+    if body.sold_out:
+        db.set_availability(day, [], [body.item_id])
+    else:
+        db.set_availability(day, [body.item_id], [])
+    return {"ok": True}
+
+
+class CustomItemIn(BaseModel):
+    name: str
+    price: float
+    description: str = ""
+    only_today: bool = True
+
+
+@app.post("/api/admin/custom-items")
+def admin_add_custom_item(body: CustomItemIn, x_admin_token: str | None = Header(None)):
+    """Add a dish by hand. It lives outside menu.json and the POS catalogue, so
+    it can never clash with a POS item; orders containing it are not sent to the POS."""
+    _check_admin(x_admin_token)
+    name = " ".join(body.name.split())[:60]
+    if not name:
+        raise HTTPException(400, "Give the dish a name")
+    if not 0 < body.price <= 5000:
+        raise HTTPException(400, "Enter a price in rupees")
+    item_id = menu.custom_item_id(name)
+    db.save_custom_item(item_id, name, round(body.price, 2), body.description.strip()[:200],
+                        menu.today() if body.only_today else None)
+    return {"ok": True, "id": item_id, "name": name}
+
+
+@app.delete("/api/admin/custom-items/{item_id}")
+def admin_remove_custom_item(item_id: str, x_admin_token: str | None = Header(None)):
+    _check_admin(x_admin_token)
+    if not db.remove_custom_item(item_id):
+        raise HTTPException(404, "Unknown dish")
+    return {"ok": True}
 
 
 # ---- daily specials (admin) ----

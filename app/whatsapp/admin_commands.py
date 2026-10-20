@@ -77,12 +77,13 @@ def handle_admin_command(text: str) -> str:
         return f"All {len(all_ids)} items set to available."
 
     # "special mango lassi 89"
-    m_special = re.match(r"^special\s+(.+?)\s+(\d+(?:\.\d+)?)$", t)
+    m_special = re.match(r"^special\s+(.+?)\s*(?:₹|rs\.?|inr)?\s*(\d+(?:\.\d+)?)\s*(?:rs\.?|rupees|/-|₹)?$", t)
     if m_special:
         item_name = m_special.group(1).strip().title()
         price = float(m_special.group(2))
         db.set_special(today, item_name, price)
-        return f"Today's special set: {item_name} — ₹{int(price)}"
+        db.save_custom_item(menu.custom_item_id(item_name), item_name, price, "", today)
+        return f"Today's special is on the menu: {item_name} — ₹{int(price)}"
 
     # "dal sold out"
     if "sold out" in t:
