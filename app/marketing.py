@@ -4,6 +4,8 @@ All figures on the page are sample data and the page says so. Kept here, not in
 the template, so the interactive demos and the crawlable text share one source.
 """
 SITE_REPO = "https://github.com/rahullath/commonplate"
+DEMO_URL = "https://tulsifoods.app"
+CONTACT_EMAIL = "rahullath02@gmail.com"
 
 KLINES = {
     "app": [

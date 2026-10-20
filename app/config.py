@@ -11,7 +11,10 @@ load_dotenv(BASE_DIR / ".env")
 
 DATA_DIR = BASE_DIR / "data"
 MENU_FILE = DATA_DIR / "menu.json"
-DB_FILE = DATA_DIR / "kitchen.db"
+# Vercel's filesystem is read-only except /tmp, and /tmp is wiped between
+# invocations: fine for a look around, not for real orders (see /guide).
+ON_VERCEL = bool(os.environ.get("VERCEL"))
+DB_FILE = Path("/tmp/kitchen.db") if ON_VERCEL else DATA_DIR / "kitchen.db"
 
 # The kitchen screen password. If unset, a random one is generated for this run
 # and printed at startup, so there is never a well-known default.

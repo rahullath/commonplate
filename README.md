@@ -31,6 +31,11 @@ Open http://127.0.0.1:8000. The kitchen screen is `/kitchen`, the admin `/admin`
 
 ## Deploy
 
+A live example runs at https://tulsifoods.app. Questions: rahullath02@gmail.com.
+
+On Vercel the app boots into a deployment guide at `/` (the same page lives at `/guide` everywhere).
+Vercel's disk resets, so use it to preview only; take orders from the Docker image below.
+
 The `Dockerfile` runs the app. Mount a volume at `/data` for the database. Set `ADMIN_TOKEN`
 and `BIZ_SITE_URL` in the environment.
 

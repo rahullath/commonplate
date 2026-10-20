@@ -27,7 +27,7 @@ from .config import (
     PACKING_FEE_LARGE_ORDER,
     PACKING_FEE_LARGE_ORDER_THRESHOLD,
 )
-from .config import STORE_PICKUP_LINE, STORE_WHATSAPP, UPI_PAYEE_NAME, UPI_VPA
+from .config import ON_VERCEL, STORE_PICKUP_LINE, STORE_WHATSAPP, UPI_PAYEE_NAME, UPI_VPA
 from .delivery.config import PICKUP_LAT, PICKUP_LNG
 
 # uvicorn only configures its own loggers; without this every app-level
@@ -227,8 +227,24 @@ TODAYS_PICKS = [
 ]
 
 
+def _guide_response(request: Request):
+    return templates.TemplateResponse(request, "guide.html", {
+        "demo_url": marketing.DEMO_URL, "contact_email": marketing.CONTACT_EMAIL,
+        "repo": marketing.SITE_REPO, "on_vercel": ON_VERCEL})
+
+
+@app.get("/guide", response_class=HTMLResponse)
+def guide_page(request: Request):
+    """Deployment guide: where to host this, what to set, a live demo, who to ask."""
+    return _guide_response(request)
+
+
 @app.get("/", response_class=HTMLResponse)
 def landing_page(request: Request):
+    if ON_VERCEL:
+        # A Vercel deployment can't keep orders (ephemeral disk), so the front
+        # door explains that and points at the demo and the real hosting options.
+        return _guide_response(request)
     photos = dish_photo_ids()
     picks = []
     for item_id, tag, desc in TODAYS_PICKS:
@@ -998,6 +1014,7 @@ SITEMAP_TEMPLATES = {
     "/category": "categories.html",
     "/how-to-order": "how-to-order.html",
     "/commonplate": "commonplate.html",
+    "/guide": "guide.html",
 }
 
 

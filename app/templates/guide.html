@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deployment guide | commonplate</title>
+<meta name="description" content="How to run commonplate for a real kitchen: where to host it, what to configure, a live demo, and who to ask.">
+<link rel="canonical" href="{{ site_url }}/guide">
+{% if on_vercel %}<meta name="robots" content="noindex, nofollow">{% else %}<meta name="robots" content="index, follow">{% endif %}
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="commonplate">
+<meta property="og:title" content="commonplate deployment guide">
+<meta property="og:description" content="Where to host commonplate, what to configure, a live demo, and who to ask.">
+<meta property="og:url" content="{{ site_url }}/guide">
+<meta property="og:image" content="{{ site_url }}/static/logo.png">
+<meta name="twitter:card" content="summary">
+<meta name="theme-color" content="#EFE6D2">
+<link rel="icon" type="image/png" href="/static/logo.png">
+<style>
+:root{--ink:#17120D;--paper:#EFE6D2;--red:#C8321E;--blue:#1F3FA8;--gold:#F0B21B}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:760px;margin:0 auto;padding:40px 20px 80px}
+h1{font-size:clamp(34px,7vw,56px);line-height:1.02;margin:0 0 14px;letter-spacing:-.01em}
+h2{font-size:24px;margin:44px 0 8px}
+p{margin:0 0 14px}
+a{color:var(--red)}a:hover{color:var(--blue)}
+a:focus-visible,button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.brand{font-weight:800;letter-spacing:.02em;text-transform:uppercase;font-size:15px;margin-bottom:28px}
+.notice{border:3px solid var(--ink);background:var(--gold);padding:14px 16px;border-radius:8px;margin:0 0 28px}
+.cta{display:inline-block;background:var(--ink);color:var(--paper);padding:13px 22px;border-radius:8px;font-weight:700;text-decoration:none;margin:4px 10px 10px 0}
+.cta:hover{color:var(--paper);background:var(--blue)}
+.cta.alt{background:transparent;color:var(--ink);border:2px solid var(--ink);padding:11px 20px}
+.cta.alt:hover{color:var(--paper)}
+.step{border-top:2px dashed var(--ink);padding-top:6px}
+table{border-collapse:collapse;width:100%;font-size:15px}
+td,th{text-align:left;padding:8px 10px 8px 0;border-bottom:1px dotted var(--ink);vertical-align:top}
+code{background:rgba(23,18,13,.08);padding:1px 6px;border-radius:4px;font-size:.92em}
+pre{background:var(--ink);color:var(--paper);padding:14px 16px;border-radius:8px;overflow-x:auto;font-size:14px}
+pre code{background:none;padding:0}
+</style>
+</head>
+<body>
+<main>
+  <div class="brand">commonplate</div>
+  <h1>Your deployment is up. Here is what to do next.</h1>
+  {% if on_vercel %}
+  <p class="notice"><strong>This is a Vercel preview, so nothing you do here is saved.</strong> Vercel runs the app as short-lived functions on a disk that resets, so orders, settings and menu edits disappear. It is fine for a look around. Real orders need the hosting in step 2.</p>
+  {% endif %}
+  <p>commonplate is direct ordering for small kitchens: menu, cart, UPI or cash checkout, a kitchen screen, tracking and WhatsApp updates. No commission, no middleman, open source.</p>
+  <p>
+    <a class="cta" href="{{ demo_url }}" rel="noopener" target="_blank">See a live kitchen: {{ demo_url.split('//')[1] }}</a>
+    <a class="cta alt" href="/menu">Try the sample menu here</a>
+  </p>
+
+  <section class="step">
+    <h2>1. See it working</h2>
+    <p>The live demo at <a href="{{ demo_url }}" rel="noopener" target="_blank">{{ demo_url.split('//')[1] }}</a> is a real kitchen running this code. Place a test order there, then open its kitchen screen to see the other side. On this deployment, <a href="/menu">/menu</a> shows the sample kitchen and <code>/kitchen</code> is the kitchen screen (it asks for your <code>ADMIN_TOKEN</code>).</p>
+  </section>
+
+  <section class="step">
+    <h2>2. Host it where the data survives</h2>
+    <p>The app is one process with a SQLite file, so it needs a disk that persists. Use the included <code>Dockerfile</code> on Railway, Fly.io, Render or any small server, and mount a volume at <code>/data</code>.</p>
+<pre><code>git clone {{ repo }}
+cd commonplate
+docker build -t commonplate .
+docker run -p 8000:8000 -v commonplate-data:/data \
+  -e ADMIN_TOKEN=pick-a-long-secret \
+  -e BIZ_SITE_URL=https://your-domain.com \
+  -e BIZ_NAME="Your Kitchen" commonplate</code></pre>
+    <p>Vercel works for previews of the look and feel, not for taking orders.</p>
+  </section>
+
+  <section class="step">
+    <h2>3. Make it yours</h2>
+    <table>
+      <tr><th scope="row"><code>ADMIN_TOKEN</code></th><td>Password for the kitchen screen and admin. Set a long random value.</td></tr>
+      <tr><th scope="row"><code>BIZ_SITE_URL</code></th><td>Your real https address. Drives links, the sitemap and search listings.</td></tr>
+      <tr><th scope="row"><code>BIZ_NAME</code>, <code>BIZ_PHONE</code>, <code>BIZ_CITY</code>…</th><td>Name, phone, address and opening hours. Full list in <code>.env.example</code>.</td></tr>
+      <tr><th scope="row"><code>data/menu.json</code></th><td>Your menu. A sample is included; replace it.</td></tr>
+      <tr><th scope="row">Optional</th><td>WhatsApp, Petpooja, couriers, Twilio and Telegram stay off until you add their keys.</td></tr>
+    </table>
+  </section>
+
+  <section class="step">
+    <h2>4. Go live</h2>
+    <p>Open the kitchen screen on the counter device, place a test order, and check the WhatsApp message arrives. Then submit <code>/sitemap.xml</code> in Google Search Console so customers can find you.</p>
+  </section>
+
+  <section class="step">
+    <h2>Stuck, or not sure which option fits?</h2>
+    <p>Email <a href="mailto:{{ contact_email }}">{{ contact_email }}</a> and say what kind of kitchen you run. Code and issues: <a href="{{ repo }}" rel="noopener">GitHub</a>. More on the idea: <a href="/commonplate">about commonplate</a>.</p>
+  </section>
+</main>
+</body>
+</html>
