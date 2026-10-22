@@ -1,19 +1,15 @@
-// Kitchen: the owner's order screen. One card per order with the bill split,
-// everything needed to book Porter, and one big button for the next step.
-// Every button that changes an order also messages the customer on WhatsApp.
+// Kitchen v2: the owner's screen. Three tabs (Orders, Menu, Shop), one order list,
+// one order page with one big button. Every button that changes an order also
+// messages the customer on WhatsApp (server side).
 (function () {
-  const TOKEN_KEY = "admin_token";
-  const SOUND_KEY = "kitchen_sound";
-  const app = document.getElementById("app");
-  let token = null, data = null, tab = "now", seen = null, soundOn = false, audio = null;
-  let view = "home", focusOid = null, showMore = false;  // home | together | focus | later | done
-  let shopItems = null, shopChanges = [], shopQ = "", editId = null;  // Shop tab: dishes (loaded when opened) and the search text
+  const TOKEN_KEY = "admin_token", SOUND_KEY = "kitchen_sound";
+  const app = document.getElementById("app"), bannerEl = document.getElementById("banner");
+  let token = null, data = null, seen = null, soundOn = false, audio = null;
+  let tab = "orders", oid = null, sheet = null, showDone = false, lastOk = 0;
+  let shopItems = null, shopChanges = [], shopQ = "", editId = null;
   const shopDraft = { name: "", price: "", reason: "", onlyToday: true };
-  const plated = new Set();  // "Cook together" ticks, kept until reload
-  const drafts = {};  // per-order Porter link/fare typed but not yet sent
-  // /kitchen/o/46 (the Open order button on the owner's WhatsApp alert) jumps to #46.
+  const drafts = {};  // per-order rider paste/fare typed but not yet sent
   let focusId = +((/^\/kitchen\/o\/(\d+)/.exec(location.pathname) || [])[1]) || null;
-
   try { token = localStorage.getItem(TOKEN_KEY); soundOn = localStorage.getItem(SOUND_KEY) === "1"; } catch (_) {}
 
   // ---------- helpers
@@ -28,27 +24,39 @@
   const phone10 = (p) => String(p || "").replace(/\D/g, "");
   const waNum = (p) => { const d = phone10(p); return d.length === 10 ? "91" + d : d; };
   const prettyPhone = (p) => { const d = phone10(p); return d.length === 10 ? d.slice(0, 5) + " " + d.slice(5) : "+" + d; };
-  const splitAddr = (a) => { const m = /\s*\(Landmark:\s*(.*?)\)\s*$/i.exec(a || ""); return m ? [a.slice(0, m.index), m[1]] : [a || "", ""]; };
+  const firstName = (o) => String(o.customer_name || "the customer").trim().split(/\s+/)[0];
   const WINDOWS = { lunch: "Lunch (12:00–2:30)", dinner: "Dinner (6:30–9:30)" };
+  const STATUS = { new: "New", preparing: "Cooking", ready: "Packed", out_for_delivery: "On the way", delivered: "Delivered", cancelled: "Cancelled" };
+  const OPEN = ["new", "preparing", "ready", "out_for_delivery"];
+  const needsMoney = (o) => (o.payment_method === "upi" && !o.paid && o.status !== "cancelled" && o.status !== "delivered") ? 1 : 0;
+  const offPos = (o) => (o.items || []).some((i) => String(i.item_id || "").startsWith("sp-"));
+  const ICON = {
+    orders: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 4h14v16H5zM9 9h6M9 13h6M9 17h3"/></svg>',
+    menu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>',
+    shop: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9l1.5-5h13L20 9M4 9v11h16V9M4 9h16M10 20v-6h4v6"/></svg>',
+  };
 
   function toast(msg, ms) {
     const t = document.createElement("div"); t.className = "toast"; t.textContent = msg;
     document.body.appendChild(t); setTimeout(() => t.remove(), ms || 3500);
   }
 
-  async function api(url, opts) {
+  // One 401 can be a blip: retry once before treating it as a wrong password.
+  async function api(url, opts, retried) {
     opts = opts || {};
     const res = await fetch(url, { ...opts, headers: { "X-Admin-Token": token, "Content-Type": "application/json", ...(opts.headers || {}) } });
-    if (res.status === 401) { try { localStorage.removeItem(TOKEN_KEY); } catch (_) {} token = null; renderLogin("That password didn't work. Try again."); throw new Error("auth"); }
+    if (res.status === 401) {
+      if (!retried) { await new Promise((r) => setTimeout(r, 800)); return api(url, opts, true); }
+      try { localStorage.removeItem(TOKEN_KEY); } catch (_) {}
+      token = null; renderLogin("That password didn't work. Try again."); throw new Error("auth");
+    }
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.detail || "Something went wrong. Try again.");
     return body;
   }
 
   // ---------- sound (phones only allow it after a tap)
-  function unlockSound() {
-    try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); audio.resume(); } catch (_) {}
-  }
+  function unlockSound() { try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); audio.resume(); } catch (_) {} }
   function ring() {
     if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 400]);
     if (!soundOn || !audio) return;
@@ -61,414 +69,369 @@
     });
   }
 
+  // ---------- rider link and address cleaning (mirrors app/links.py)
+  function cleanLink(text) {
+    const t = (text || "").trim();
+    if (!t) return { state: "empty" };
+    const norm = t.slice(0, 5000).replace(/[​-‍﻿]/g, "").replace(/[“”‘’]/g, '"').replace(/\s*\n\s*/g, " ");
+    const re = /(?:https?:\/\/|www\.)[^\s<>"'()\[\]]+|\b(?:[a-z0-9-]+\.)+(?:in|com|bike|app|co)\/[^\s<>"'()\[\]]+/gi;
+    const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return ""; } };
+    const found = (norm.match(re) || []).map((u) => u.replace(/[.,;:!?)\]]+$/, "")).map((u) => u.replace(/^http:\/\//i, "https://")).map((u) => /^https:\/\//i.test(u) ? u : "https://" + u)
+      .map((u) => { if (!/(^|\.)porter\.in$/.test(host(u))) return u; try { const x = new URL(u); [...x.searchParams.keys()].forEach((k) => { if (/^utm_/i.test(k)) x.searchParams.delete(k); }); return x.toString(); } catch (e) { return u; } });
+    const real = found.filter((u) => host(u) && !/(^|\.)(play\.google\.com|apps\.apple\.com|itunes\.apple\.com)$/.test(host(u)));
+    const best = real.find((u) => /(^|\.)(porter\.in|rapido\.bike|rapido\.in|borzodelivery\.com)$/.test(host(u)));
+    if (best) return { state: "ok", url: best };
+    if (real.length) return { state: "unknown", url: real[0] };
+    return { state: found.length ? "store" : "none" };
+  }
+  // The rider apps' Drop box is a map search: flat numbers, floors and landmarks go in the phone call.
+  function splitDrop(raw) {
+    let s = (raw || "").trim(), landmark = "";
+    const m = /\(\s*landmark:\s*(.*?)\)\s*$/i.exec(s);
+    if (m) { landmark = m[1].trim(); s = s.slice(0, m.index).trim(); }
+    s = s.replace(/\([^)]*\)/g, " ");
+    const parts = s.split(",").map((x) => x.trim()).filter(Boolean);
+    const unit = /^(flat|door|house|plot|apt|apartment|block|tower|floor|\d+(st|nd|rd|th)\s+floor|no\.?|#)\b|^[\w#\/-]{1,5}$|^\d+[a-z]?([\/-]\d+[a-z]?)?$/i;
+    const details = [];
+    while (parts.length > 1 && unit.test(parts[0])) details.push(parts.shift());
+    const kept = [];
+    parts.forEach((p) => { if (/\b(near|opp|opposite|behind|beside|next to|above|below)\b/i.test(p)) landmark = landmark || p; else kept.push(p); });
+    let search = kept.join(", ");
+    return { search, details: details.join(", "), landmark };
+  }
+  function pinOf(o) {
+    const dlat = parseFloat(o.delivery_lat), dlng = parseFloat(o.delivery_lng);
+    const k = (data && data.kitchen) || {}, klat = parseFloat(k.lat), klng = parseFloat(k.lng);
+    const near = isFinite(klat) && isFinite(dlat) && Math.abs(klat - dlat) < 0.0012 && Math.abs(klng - dlng) < 0.0012;
+    return isFinite(dlat) && isFinite(dlng) && !near ? { lat: dlat, lng: dlng, url: `https://www.google.com/maps/search/?api=1&query=${dlat},${dlng}` } : null;
+  }
+  const appLink = (pkg) => `intent://#Intent;package=${pkg};S.browser_fallback_url=${encodeURIComponent("https://play.google.com/store/apps/details?id=" + pkg)};end`;
+  const PORTER_PKG = "in.porter.customerapp", RAPIDO_PKG = "com.rapido.passenger";
+
   // ---------- grouping
-  const needsMoney = (o) => (o.payment_method === "upi" && !o.paid && o.status !== "cancelled" && o.status !== "delivered") ? 1 : 0;
-  const OPEN = ["new", "preparing", "ready", "out_for_delivery"];
-  function isLater(o) {
-    if (!o.scheduled_at || o.status !== "new") return false;
-    return istDay(utc(o.scheduled_at)) > istDay(new Date());
+  function isLater(o) { return !!o.scheduled_at && o.status === "new" && istDay(utc(o.scheduled_at)) > istDay(new Date()); }
+  function dueOf(o) {
+    if (o.scheduled_at) return utc(o.scheduled_at);
+    return new Date((utc(o.created_at) || new Date()).getTime() + (o.order_type === "pickup" ? 25 : 45) * 60000);
   }
   function groups() {
-    const all = (data && data.orders) || [];
-    const today = istDay(new Date());
+    const all = (data && data.orders) || [], today = istDay(new Date());
     const now = all.filter((o) => OPEN.includes(o.status) && !isLater(o));
     const later = all.filter((o) => OPEN.includes(o.status) && isLater(o));
     const done = all.filter((o) => !OPEN.includes(o.status) && istDay(utc(o.created_at)) === today);
     const rank = { new: 0, preparing: 1, ready: 2, out_for_delivery: 3 };
-    now.sort((a, b) => (needsMoney(b) - needsMoney(a)) || rank[a.status] - rank[b.status] || a.id - b.id);
+    now.sort((a, b) => (needsMoney(b) - needsMoney(a)) || rank[a.status] - rank[b.status] || (dueOf(a) - dueOf(b)) || a.id - b.id);
     later.sort((a, b) => (a.scheduled_at || "").localeCompare(b.scheduled_at || ""));
     return { now, later, done };
   }
+  const summaryItems = (o) => (o.items || []).map((i) => `${num(i.qty)} × ${i.name}`).join(", ");
 
-  // ---------- views
+  // ---------- login
   function renderLogin(err) {
-    app.innerHTML = `<form class="login" id="login">
-      <h1>Kitchen</h1>
-      <div class="hint">Enter the kitchen password once. This phone remembers it.</div>
-      <input id="pw" type="password" autocomplete="current-password" placeholder="Kitchen password" required>
+    bannerEl.innerHTML = "";
+    app.innerHTML = `<form class="login" id="login"><h1>Kitchen</h1>
+      <div>Enter the kitchen password once. This phone remembers it.</div>
+      <input class="in" id="pw" type="password" autocomplete="current-password" placeholder="Kitchen password" required>
       ${err ? `<div class="flag">${esc(err)}</div>` : ""}
-      <button class="big" type="submit">Open the kitchen</button>
-    </form>`;
+      <button class="big" type="submit">Open the kitchen</button></form>`;
     document.getElementById("login").addEventListener("submit", (e) => {
-      e.preventDefault();
-      token = document.getElementById("pw").value.trim();
+      e.preventDefault(); token = document.getElementById("pw").value.trim();
       try { localStorage.setItem(TOKEN_KEY, token); } catch (_) {}
       unlockSound(); start();
     });
   }
 
-  function summary(g) {
-    const today = istDay(new Date());
-    const todays = ((data && data.orders) || []).filter((o) => o.status !== "cancelled" && istDay(utc(o.created_at)) === today);
-    const sales = todays.reduce((s, o) => s + num(o.total), 0);
-    return `${todays.length} order${todays.length === 1 ? "" : "s"} today · ${rs(Math.round(sales))}` + (g.now.length ? ` · ${g.now.length} open` : "");
-  }
-
-  // ---------- multi-order views
-  const clock = () => new Date().toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
-  // The time something is due: the booked time, or placed time plus the usual wait.
-  function dueOf(o) {
-    if (o.scheduled_at) return utc(o.scheduled_at);
-    const placed = utc(o.created_at) || new Date();
-    return new Date(placed.getTime() + (o.order_type === "pickup" ? 25 : 45) * 60000);
-  }
-  const summaryItems = (o) => (o.items || []).map((i) => `${num(i.qty)} × ${i.name}`).join(", ");
-  const areaOf = (o) => { const [addr] = splitAddr(o.delivery_address); const parts = addr.split(",").map((x) => x.trim()).filter(Boolean); return parts.length > 2 ? parts[parts.length - 2] : (parts[1] || parts[0] || ""); };
-  const STATE_RANK = { new: 0, preparing: 1, ready: 2, out_for_delivery: 3 };
-  function queue() {
-    // Most urgent first: orders waiting to be accepted, then cooking, then the rest; by due time within each.
-    return groups().now.slice().sort((a, b) => (STATE_RANK[a.status] - STATE_RANK[b.status]) || (dueOf(a) - dueOf(b)) || a.id - b.id);
-  }
-  const rowSub = (o) => {
-    const st = { new: "New", preparing: "Cooking", ready: o.order_type === "pickup" ? "Ready for pickup" : "Ready, needs a rider", out_for_delivery: "On the way" }[o.status];
-    return `${st} · ${o.order_type === "pickup" ? "pickup" : "delivery"} ${time(dueOf(o))}${needsMoney(o) ? " · 💰 check payment" : ""}`;
-  };
-
-  function banner(q) {
-    const top = q[0];
-    const fresh = q.filter((o) => o.status === "new" && !(view === "home" && top && o.id === top.id));
-    if (!fresh.length) return "";
-    const o = fresh[fresh.length - 1];
-    return `<div class="newban" role="status"><div class="nb-t" data-open="${o.id}">
-        <div class="nb-k">NEW · #${o.id} · ${o.order_type === "pickup" ? "PICKUP" : "DELIVERY"} ${time(dueOf(o))}${fresh.length > 1 ? ` · +${fresh.length - 1} more` : ""}</div>
+  // ---------- banner (outside the re-rendered view, so it shows while she types)
+  function renderBanner() {
+    const stale = token && lastOk && Date.now() - lastOk > 45000;
+    const conn = !token ? "" : stale
+      ? `<div class="conn bad" role="alert">No internet. Orders may be missing.</div>`
+      : lastOk ? `<div class="conn">Internet OK · updated ${ago(new Date(lastOk))}</div>` : "";
+    const fresh = ((data && data.orders) || []).filter((o) => o.status === "new" && !isLater(o) && !(tab === "orders" && oid === o.id));
+    let ban = "";
+    if (fresh.length) {
+      const o = fresh[fresh.length - 1];
+      ban = `<div class="newban" role="status"><div class="nb-t" data-open="${o.id}">
+        <div class="nb-k">🔔 New order #${o.id} · ${o.order_type === "pickup" ? "Pickup" : "Delivery"} ${time(dueOf(o))}${fresh.length > 1 ? ` · +${fresh.length - 1} more` : ""}</div>
         <div class="nb-i">${esc(summaryItems(o))}</div></div>
-      <button class="nb-b" data-accept="${o.id}">Accept</button></div>`;
+        <button class="nb-b" data-accept="${o.id}">Accept</button></div>`;
+    }
+    bannerEl.innerHTML = conn + ban;
+    bannerEl.querySelectorAll("[data-open]").forEach((b) => b.onclick = () => openOrder(+b.dataset.open));
+    bannerEl.querySelectorAll("[data-accept]").forEach((b) => b.onclick = () => {
+      const id = b.dataset.accept;
+      act(b, () => api(`/api/admin/orders/${id}/status`, { method: "POST", body: JSON.stringify({ status: "preparing" }) }), `Order #${id} accepted. Customer told.`);
+    });
   }
 
-  function topbar(g, title, back) {
-    const n = g.now.length;
-    return `<header class="top"><div class="top-row">
-        ${back ? `<button class="back" id="back" aria-label="Back">‹</button>` : `<span class="clock" id="clock">${clock()}</span>`}
-        ${title ? `<span class="ttl">${title}</span>` : `<span class="on">${n} order${n === 1 ? "" : "s"} on</span>`}
-        <button class="sound ${soundOn ? "on" : "off"}" id="sound" aria-label="${soundOn ? "Sound on" : "Sound off"}">${soundOn ? "🔔" : "🔕 Sound off"}</button>
-      </div></header>`;
+  // ---------- shell
+  function topbar(title, back) {
+    return `<header class="top">${back ? `<button class="back" id="back" aria-label="Back">‹ Back</button>` : ""}
+      <span class="ttl">${esc(title)}</span>
+      <button class="sound ${soundOn ? "on" : "off"}" id="sound" aria-label="${soundOn ? "Sound on" : "Sound off"}">${soundOn ? "🔔" : "🔕 Sound off"}</button></header>`;
   }
-
-  const offPos = (o) => (o.items || []).some((i) => String(i.item_id || "").startsWith("sp-"));
-  const offPosNote = (o) => offPos(o) ? `<div class="nu-note">⭐ Has a special that is not on Petpooja. Ring it up on the POS yourself.</div>` : "";
-
-  function nextUpCard(o) {
-    const note = (o.instructions || "").trim();
-    const itemNotes = (o.items || []).filter((i) => i.note).map((i) => `${esc(i.name)}: ${esc(i.note)}`);
-    const meta = [o.payment_method === "upi" ? (o.paid ? "Paid" : "UPI not confirmed") : "Cash", o.order_type === "delivery" ? areaOf(o) : "Pickup", `due ${time(dueOf(o))}`].filter(Boolean).join(" · ");
-    const color = o.status === "new" ? "#E8A33D" : o.status === "preparing" ? "#0E7A45" : "#1B5FA8";
-    return `<article class="nu" id="o-${o.id}" style="--ring:${color}">
-      <div class="nu-h" style="background:${color}"><span>#${o.id} · ${{ new: "NEW", preparing: "COOKING", ready: "READY", out_for_delivery: "ON THE WAY" }[o.status]}</span><span>${o.order_type === "pickup" ? "PICKUP" : "DELIVERY"}</span></div>
-      <div class="nu-b">
-        <div class="nu-items">${(o.items || []).map((i) => `${num(i.qty)} × ${esc(i.name)}`).join("<br>")}</div>
-        ${offPosNote(o)}
-        ${note || itemNotes.length ? `<div class="nu-note">${[esc(note), ...itemNotes].filter(Boolean).join("<br>")}</div>` : ""}
-        <div class="nu-meta">${esc(meta)}</div>
-        ${payNow(o)}
-        ${nextStep(o)}
-        <button class="more" data-open="${o.id}">All details${o.order_type === "delivery" && ["preparing", "ready"].includes(o.status) && !(o.sr_tracking_url || o.sr_courier) ? ": book the rider ›" : " ›"}</button>
-      </div></article>`;
+  function tabbar(g) {
+    const closed = data && data.store && !data.store.is_open;
+    const t = (k, label, extra, cls) => `<button data-tab="${k}" class="${tab === k ? "on" : ""} ${cls || ""}" aria-label="${label}">${ICON[k]}<span>${label}${extra || ""}</span></button>`;
+    return `<nav class="tabs">${t("orders", "Orders", g.now.length ? `<span class="dot">${g.now.length}</span>` : "")}${t("menu", "Menu")}${t("shop", closed ? "Closed" : "Shop", "", closed ? "shut" : "")}</nav>`;
   }
-
   function closedStrip() {
     const st = data && data.store;
     if (!st || st.is_open) return "";
-    const back = st.turn_on_time ? new Date(String(st.turn_on_time).includes("T") ? st.turn_on_time + "+05:30" : st.turn_on_time.replace(" ", "T") + "+05:30") : null;
-    const when = back && !isNaN(back) ? ` Opens again ${day(back)} ${time(back)}.` : " Stays closed until you open it.";
-    return `<button class="shutstrip" data-view="shop">🔴 Online orders are OFF.${when} Tap to change.</button>`;
+    return `<button class="strip red" data-tab="shop">Online orders are OFF. Tap to change.</button>`;
   }
 
-  function homeView(g) {
-    const q = queue(), top = q[0];
-    if (!top) return `${banner(q)}${closedStrip()}<main class="list"><div class="empty">No orders right now.<br>New ones appear here by themselves.</div></main>${bottomBar(g)}`;
-    const rest = q.slice(1), shown = showMore ? rest : rest.slice(0, 2);
-    const unpaid = rest.filter(needsMoney);
-    return `${banner(q)}<main class="home">
-      ${closedStrip()}
-      ${unpaid.length ? `<button class="paystrip" data-open="${unpaid[0].id}">💰 ${unpaid.length} other payment${unpaid.length > 1 ? "s" : ""} to check. Tap to open #${unpaid[0].id}.</button>` : ""}
-      <div class="lane">DO THIS NEXT</div>${nextUpCard(top)}
-      ${rest.length ? `<div class="lane dim">THEN</div><div class="rows">${shown.map((o) => `<button class="rowc" data-open="${o.id}">
-          <div><div class="rc-t">#${o.id} · ${esc(summaryItems(o))}</div><div class="rc-s">${esc(rowSub(o))}</div></div>
-          <span class="rc-time ${dueOf(o) - Date.now() < 15 * 60000 ? "soon" : ""}">${time(dueOf(o))}</span></button>`).join("")}
-        ${rest.length > shown.length ? `<button class="rowc more-rows" id="showmore">+ ${rest.length - shown.length} more</button>` : ""}</div>` : ""}
-      </main>${bottomBar(g)}`;
-  }
-  function bottomBar(g) {
-    const closed = data && data.store && !data.store.is_open;
-    return `<div class="bbar four"><button data-view="together">Cook together</button><button data-view="later">Later (${g.later.length})</button><button data-view="done">Done (${g.done.length})</button><button data-view="shop" class="${closed ? "shut" : ""}">${closed ? "🔴 Closed" : "Shop"}</button></div>`;
+  // ---------- orders list
+  function ordersView(g) {
+    const rows = (list) => list.map((o) => {
+      const note = (o.instructions || "").trim();
+      return `<button class="ocard ${o.status}" data-open="${o.id}">
+        <div class="oc-h"><span class="oc-id">#${o.id} · ${o.order_type === "pickup" ? "Pickup" : "Delivery"}</span><span class="oc-st ${o.status}">${STATUS[o.status] || o.status}</span></div>
+        <div class="oc-i">${esc(summaryItems(o))}</div>
+        <div class="oc-m">${esc(firstName(o))} · due ${time(dueOf(o))} · ${o.payment_method === "upi" ? (o.paid ? "Paid " : "UPI ") : "Cash "}${rs(o.total)}</div>
+        ${needsMoney(o) ? `<span class="chipwarn">Check payment</span> ` : ""}${offPos(o) ? `<span class="chipwarn">Ring up on POS</span> ` : ""}${note ? `<span class="chipwarn">Has a note</span>` : ""}
+      </button>`;
+    }).join("");
+    return `${topbar("Orders")}<main class="list">${closedStrip()}
+      ${g.now.length ? rows(g.now) : `<div class="empty">No orders right now.<br>New ones appear here by themselves.</div>`}
+      ${g.later.length ? `<div class="lane">Later (${g.later.length})</div>${rows(g.later)}` : ""}
+      ${g.done.length ? `<button class="linkbtn" id="toggledone">${showDone ? "Hide" : "Show"} done today (${g.done.length})</button>${showDone ? rows(g.done) : ""}` : ""}
+    </main>${tabbar(g)}`;
   }
 
-  // Same dish across every active order, as a prep list.
-  function togetherView(g) {
-    const act = queue().filter((o) => ["new", "preparing"].includes(o.status));
-    const map = new Map();
-    act.forEach((o) => (o.items || []).forEach((i) => {
-      const k = i.name; const e = map.get(k) || { name: k, qty: 0, chips: [] };
-      e.qty += num(i.qty); e.chips.push({ id: o.id, qty: num(i.qty), note: i.note || "" });
-      const on = (o.instructions || "").trim(); if (on && !e.chips.some((c) => c.id === o.id && c.order)) e.chips.push({ id: o.id, order: true, note: on });
-      map.set(k, e);
-    }));
-    const list = [...map.values()].sort((a, b) => b.qty - a.qty);
-    return `<main class="home"><div class="tg-h">Same dish across all active orders. Tap when plated.</div>
-      ${list.length ? list.map((e) => `<button class="tg ${plated.has(e.name) ? "done" : ""}" data-plate="${esc(e.name)}">
-        <div class="tg-top"><span class="tg-q">${e.qty} ×</span><span class="tg-n">${esc(e.name)}</span><span class="tg-c">${plated.has(e.name) ? "✓" : ""}</span></div>
-        <div class="tg-chips">${e.chips.map((c) => c.note ? `<span class="chip flagnote">#${c.id} ${esc(c.note)}</span>` : `<span class="chip">#${c.id} ×${c.qty}</span>`).join("")}</div></button>`).join("") : `<div class="empty">Nothing is being cooked right now.</div>`}
-      </main>`;
+  // ---------- one order page
+  function whenLine(o) {
+    const placed = utc(o.created_at);
+    if (o.scheduled_at) { const s = utc(o.scheduled_at), win = WINDOWS[o.scheduled_window]; return `For ${win ? win + ", " : time(s) + ", "}${day(s)} · placed ${time(placed)}`; }
+    return `Placed ${time(placed)} · ${ago(placed)} · as soon as possible`;
+  }
+  function moneyLine(o) {
+    const total = rs(o.total);
+    if (o.payment_method === "upi" && o.paid) return `<div class="money ok">✓ Paid ${total} by UPI</div>`;
+    if (o.payment_method === "upi") return `<div class="money">UPI ${total}: not confirmed yet</div>`;
+    return `<div class="money">Cash: collect ${rs(Math.ceil(num(o.total)))}${o.order_type === "pickup" ? " at the counter" : ". The rider collects it."}</div>`;
+  }
+  function payCard(o) {
+    if (!needsMoney(o)) return "";
+    const total = rs(o.total);
+    return `<div class="box paycard"><div class="q">Did ${esc(firstName(o))} pay ${total}?</div>
+      <div class="s">Open GPay or PhonePe and look for <b>${total}</b>. Tap green only when you can see it.</div>
+      <button class="big" data-paid="${o.id}">Yes, I got ${total}</button>
+      <button class="big ghost" data-paylink="${o.id}">Send payment link on WhatsApp</button>
+      <button class="btn" data-copypay="${o.id}">Copy the link</button>
+      <div class="s">Not there after a few minutes? <a href="tel:+${waNum(o.customer_phone)}"><b>Call ${prettyPhone(o.customer_phone)}</b></a></div></div>`;
+  }
+  function riderBox(o) {
+    if (o.order_type !== "delivery" || !OPEN.includes(o.status)) return "";
+    const sp = splitDrop(o.delivery_address), pin = pinOf(o);
+    const flag = o.address_flagged ? `<div class="flag">${esc(o.address_flag_reason || "Check this address.")} If it looks wrong, call the customer before booking.</div>` : "";
+    const noPin = pin ? "" : `<div class="warnc">The customer did not drop an exact pin. Check the landmark or call before booking.</div>`;
+    const detail = [sp.details, sp.landmark ? "near " + sp.landmark.replace(/^(near|opp|opposite)\s+/i, "") : ""].filter(Boolean).join(" · ");
+    if (o.sr_tracking_url || o.sr_courier) {
+      return `<div class="box"><h3>Rider</h3><div class="good">🛵 ${esc(o.sr_courier || "Rider booked")}${o.sr_tracking_url ? ` · <a href="${esc(o.sr_tracking_url)}" target="_blank" rel="noopener">rider link</a>` : ""}</div>
+        <div class="drop">${esc(sp.search)}</div>${pin ? `<a href="${pin.url}" target="_blank" rel="noopener">See it on the map</a>` : ""}</div>`;
+    }
+    const d = drafts[o.id] || {}, c = cleanLink(d.link);
+    const found = c.state === "ok" ? `<div class="found ok">✓ Found the rider link</div>`
+      : c.state === "unknown" ? `<div class="found unknown">Found a link, but not a Porter or Rapido one. Check it.</div>`
+      : c.state === "store" ? `<div class="found bad">That is the app-store link, not the rider link.</div>`
+      : c.state === "none" ? `<div class="found bad">No link in that yet.</div>` : "";
+    const cashNote = o.payment_method === "upi" && o.paid ? "Already paid. Rider collects nothing."
+      : o.payment_method === "upi" ? "UPI not confirmed yet. Check before the rider leaves." : `Rider collects ${rs(Math.ceil(num(o.total)))} cash.`;
+    return `<div class="box"><h3>Book a rider</h3>
+      <div class="step"><div class="n">1</div><div><div class="t">Drop address</div><div class="drop">${esc(sp.search)}</div>
+        ${detail ? `<div class="d">Tell the rider on the phone: ${esc(detail)}</div>` : ""}</div></div>
+      ${noPin}${flag}
+      <button class="big" data-bookapp="${o.id}" data-pkg="porter">Copy address and open Porter</button>
+      <button class="linkbtn" data-bookapp="${o.id}" data-pkg="rapido">Use Rapido instead</button>
+      <div class="step"><div class="n">2</div><div><div class="t">Paste it in Drop, book, then tap Share and Copy</div><div class="d">${esc(cashNote)}</div></div></div>
+      <div class="step"><div class="n">3</div><div style="width:100%"><div class="t">Paste what you copied</div></div></div>
+      <div class="field"><input id="link-${o.id}" data-draft="link" data-id="${o.id}" inputmode="url" placeholder="Paste here" value="${esc(d.link || "")}" aria-label="Rider message">
+        <div id="found-${o.id}">${found}</div></div>
+      <button class="btn" data-readclip="${o.id}">Paste for me</button>
+      <div class="field"><label for="fare-${o.id}">What the rider app charged (₹, optional)</label>
+        <input id="fare-${o.id}" data-draft="fare" data-id="${o.id}" inputmode="decimal" placeholder="e.g. 62" value="${esc(d.fare || "")}"></div>
+      <button class="big blue" id="send-${o.id}" data-dispatch="${o.id}" ${c.state === "ok" || c.state === "unknown" ? "" : "disabled"}>Send link to ${esc(firstName(o))}</button>
+      <div class="tells">${firstName(o)} gets “Your order is on its way” with the rider's live link.</div></div>`;
+  }
+  function nextButton(o) {
+    const del = o.order_type === "delivery", id = o.id;
+    if (o.status === "new") return `<button class="big" data-do="preparing" data-id="${id}">Accept order</button><div class="tells">${esc(firstName(o))} gets: “The kitchen has accepted your order.”</div>`;
+    if (o.status === "preparing") return `<button class="big" data-do="ready" data-id="${id}">${del ? "Food is packed" : "Food is ready for pickup"}</button><div class="tells">${del ? "The customer gets: “Packed and ready. We're booking your rider.”" : "The customer gets: “Your order is ready to collect.”"}</div>`;
+    if (o.status === "ready" && !del) return `<button class="big blue" data-ask="delivered" data-id="${id}">Customer has collected it</button>`;
+    if (o.status === "ready" && del) return (o.sr_tracking_url || o.sr_courier) ? `<div class="warnc">Rider is booked. Waiting for pickup.</div>` : `<div class="warnc">Food is packed. Book the rider below.</div>`;
+    if (o.status === "out_for_delivery") return `<div class="warnc">The rider has the food. It has NOT reached the customer yet.</div><button class="big blue" data-ask="delivered" data-id="${id}">Customer has the food</button>`;
+    return "";
+  }
+  function orderPage(o, g) {
+    const note = (o.instructions || "").trim();
+    const itemNotes = (o.items || []).filter((i) => i.note).map((i) => `${esc(i.name)}: ${esc(i.note)}`);
+    const open = OPEN.includes(o.status);
+    return `${topbar("Order #" + o.id, true)}<main class="page">
+      <div class="box"><div class="status ${o.status}">${STATUS[o.status] || o.status} · ${o.order_type === "pickup" ? "Pickup" : "Delivery"}</div>
+        <div class="when">${esc(whenLine(o))}</div>
+        ${offPos(o) ? `<div class="note">⭐ A special that is not on Petpooja. Ring it up on the POS yourself.</div>` : ""}
+        <ul class="items">${(o.items || []).map((i) => `<li><span class="q">${num(i.qty)}×</span><span>${esc(i.name)}</span></li>`).join("")}</ul>
+        ${note || itemNotes.length ? `<div class="note">📝 ${[esc(note), ...itemNotes].filter(Boolean).join("<br>")}</div>` : ""}
+        ${moneyLine(o)}
+        ${open ? nextButton(o) : ""}</div>
+      ${payCard(o)}
+      <div class="box cust"><div><b>${esc(o.customer_name || "Customer")}</b><div class="ph">${prettyPhone(o.customer_phone)}</div></div>
+        <div class="cbtns"><a href="tel:+${waNum(o.customer_phone)}">Call</a><a href="https://wa.me/${waNum(o.customer_phone)}" target="_blank" rel="noopener">WhatsApp</a></div></div>
+      ${riderBox(o)}
+      ${o.feedback ? `<div class="box"><b>${{ good: "😋 Loved it", ok: "🙂 It was okay", bad: "😕 Not great" }[o.feedback.rating] || ""}</b>${o.feedback.comment ? `<div>“${esc(o.feedback.comment)}”</div>` : ""}</div>` : ""}
+      <a class="linkbtn" style="text-align:center" href="${esc(o.track_url)}" target="_blank" rel="noopener">Customer's tracking page</a>
+      ${["new", "preparing"].includes(o.status) ? `<button class="linkbtn red" data-ask="cancelled" data-id="${o.id}">Cancel this order</button>` : ""}
+      ${o.status === "ready" && o.order_type === "delivery" ? `<button class="linkbtn" data-ask="delivered" data-id="${o.id}">Delivered without a rider</button>` : ""}
+    </main>${tabbar(g)}`;
   }
 
+  // ---------- menu + shop
   function priceEditor(d) {
-    return `<div class="sh-edit"><div class="sh-n">${esc(d.name)}<span>Base price ${rs(d.original)}${d.original_half ? ` · half ${rs(d.original_half)}` : ""}</span></div>
-      <label class="sh-l">Price<input class="sh-in" id="pe-price" inputmode="decimal" value="${d.price}"></label>
-      ${d.half ? `<label class="sh-l">Half portion<input class="sh-in" id="pe-half" inputmode="decimal" value="${d.half}"></label>` : ""}
-      <div class="sh-btns"><button class="sh-b" data-pe="cancel">Cancel</button><button class="sh-b save" data-pe="save" data-id="${esc(d.id)}">Save price</button></div>
-      ${d.price !== d.original || (d.half && d.half !== d.original_half) ? `<button class="sh-x wide" data-pe="reset" data-id="${esc(d.id)}">Back to ${rs(d.original)}</button>` : ""}
-    </div>`;
+    return `<div class="box"><div class="dn">${esc(d.name)}<span>Base price ${rs(d.original)}${d.original_half ? ` · half ${rs(d.original_half)}` : ""}</span></div>
+      <div class="field"><label for="pe-price">Price</label><input id="pe-price" inputmode="decimal" value="${d.price}"></div>
+      ${d.half ? `<div class="field"><label for="pe-half">Half portion</label><input id="pe-half" inputmode="decimal" value="${d.half}"></div>` : ""}
+      <div class="grid2"><button class="big ghost" data-pe="cancel">Cancel</button><button class="big" data-pe="save" data-id="${esc(d.id)}">Save price</button></div>
+      ${d.price !== d.original || (d.half && d.half !== d.original_half) ? `<button class="btn" data-pe="reset" data-id="${esc(d.id)}">Back to ${rs(d.original)}</button>` : ""}
+      <div class="tells">Photos can be changed from the admin page for now.</div></div>`;
   }
-
-  function shopView() {
+  function menuView(g) {
+    const q = shopQ.trim().toLowerCase(), list = (shopItems || []).filter((d) => !q || d.name.toLowerCase().includes(q));
+    const rows = shopItems === null ? `<div class="empty">Loading dishes…</div>` : list.length ? list.slice(0, 80).map((d) => d.id === editId ? priceEditor(d) : `<div class="dish ${d.available ? "" : "off"}">
+        ${d.photo ? `<img class="thumb" src="${esc(d.photo)}" alt="" loading="lazy">` : `<div class="thumb none">No photo</div>`}
+        <div class="dn">${d.custom ? "⭐ " : ""}${esc(d.name)}<span>${d.reason ? esc(d.reason) : d.price !== d.original ? `Changed, was ${rs(d.original)}` : ""}</span></div>
+        ${d.custom ? `<button class="price" data-rm="${esc(d.id)}">Remove</button>` : `<button class="price" data-edit="${esc(d.id)}" aria-label="Change price of ${esc(d.name)}">${rs(d.price)} ✎</button>`}
+        ${d.reason ? "" : `<button class="tog ${d.available ? "on" : "so"}" data-so="${esc(d.id)}" data-now="${d.available ? 1 : 0}">${d.available ? "On" : "Sold out"}</button>`}</div>`).join("") + (list.length > 80 ? `<div class="tells">Showing 80. Type to search.</div>` : "") : `<div class="empty">No dish matches.</div>`;
+    return `${topbar("Menu")}<input class="in search" data-shop="q" placeholder="Search a dish" value="${esc(shopQ)}" aria-label="Search a dish">
+      <main class="list">${rows}
+      <div class="box"><h3>Add a special</h3>
+        <input class="in" data-shop="name" placeholder="Dish name, e.g. Mango Lassi" value="${esc(shopDraft.name)}">
+        <input class="in" data-shop="price" inputmode="decimal" placeholder="Price in rupees" value="${esc(shopDraft.price)}">
+        <label style="display:flex;gap:10px;align-items:center;font-weight:700"><input type="checkbox" data-shop="onlyToday" ${shopDraft.onlyToday ? "checked" : ""} style="width:26px;height:26px"> Only today</label>
+        <button class="big" id="addspecial">Put on the menu</button>
+        <div class="tells">Customers can order it right away. It does not go to Petpooja, so ring it up on the POS yourself.</div></div>
+      </main>${tabbar(g)}`;
+  }
+  function shopView(g) {
     const st = (data && data.store) || { is_open: true };
     const back = st.turn_on_time ? new Date(String(st.turn_on_time).includes("T") ? st.turn_on_time + "+05:30" : st.turn_on_time.replace(" ", "T") + "+05:30") : null;
     const status = st.is_open
-      ? `<div class="sh-state on">🟢 Taking online orders</div>
-         <input class="sh-in" data-shop="reason" placeholder="Message for customers (optional)" value="${esc(shopDraft.reason)}">
-         <div class="sh-btns">
-           <button class="sh-b" data-close="hours:1">Close for 1 hour</button>
-           <button class="sh-b" data-close="hours:2">Close for 2 hours</button>
-           <button class="sh-b" data-close="today">Close for today</button>
-           <button class="sh-b" data-close="manual">Close until I open</button>
-         </div>`
-      : `<div class="sh-state off">🔴 Online orders are OFF</div>
-         <div class="sh-sub">${esc((st.reason || "").replace(/([^.!?])$/, "$1."))}${back && !isNaN(back) ? ` Opens again ${day(back)} ${time(back)}.` : ""}</div>
+      ? `<div class="shop-state on">Taking online orders</div>
+         <input class="in" data-shop="reason" placeholder="Message for customers (optional)" value="${esc(shopDraft.reason)}">
+         <div class="grid2"><button class="btn" data-close="hours:1">Close for 1 hour</button><button class="btn" data-close="hours:2">Close for 2 hours</button>
+           <button class="btn" data-close="today">Rest of today</button><button class="btn" data-close="manual">Until I open</button></div>`
+      : `<div class="shop-state off">Online orders are OFF</div>
+         <div>${esc((st.reason || "").replace(/([^.!?])$/, "$1."))}${back && !isNaN(back) ? ` Opens again ${day(back)} ${time(back)}.` : ""}</div>
          <button class="big" data-open-shop="1">Open the shop now</button>`;
-    const q = shopQ.trim().toLowerCase();
-    const list = (shopItems || []).filter((d) => !q || d.name.toLowerCase().includes(q));
-    const rows = shopItems === null ? `<div class="sh-sub">Loading dishes…</div>` : list.length ? list.slice(0, 80).map((d) => d.id === editId ? priceEditor(d) : `<div class="sh-row ${d.available ? "" : "off"}">
-        <div class="sh-n">${d.custom ? "⭐ " : ""}${esc(d.name)}<span>${d.reason ? esc(d.reason) : (d.price !== d.original ? `<b class="chg">changed</b> was ${rs(d.original)}` : "")}</span></div>
-        ${d.custom ? `<button class="sh-x" data-rm="${esc(d.id)}">Remove</button>` : `<button class="sh-p" data-edit="${esc(d.id)}">${rs(d.price)} ✎</button>`}
-        ${d.reason ? "" : `<button class="sh-t ${d.available ? "on" : "so"}" data-so="${esc(d.id)}" data-now="${d.available ? 1 : 0}">${d.available ? "On" : "Sold out"}</button>`}
-      </div>`).join("") + (list.length > 80 ? `<div class="sh-sub">Showing 80. Type to search.</div>` : "") : `<div class="sh-sub">No dish matches.</div>`;
-    const changes = shopChanges.length ? `<div class="lane">PRICE CHANGES</div><div class="sh-card">${shopChanges.slice(0, 8).map((c) => `<div class="sh-ch">${esc(c.name)}${c.kind === "half" ? " (half)" : ""}: ${rs(c.old_price)} → <b>${rs(c.new_price)}</b><span>${day(utc(c.at))} ${time(utc(c.at))}</span></div>`).join("")}</div>` : "";
-    return `<main class="home shop">
-      <div class="lane">ONLINE ORDERS</div>${status}
-      <div class="lane">ADD A SPECIAL</div>
-      <div class="sh-card">
-        <input class="sh-in" data-shop="name" placeholder="Dish name, e.g. Mango Lassi" value="${esc(shopDraft.name)}">
-        <input class="sh-in" data-shop="price" inputmode="decimal" placeholder="Price in rupees" value="${esc(shopDraft.price)}">
-        <label class="sh-chk"><input type="checkbox" data-shop="onlyToday" ${shopDraft.onlyToday ? "checked" : ""}> Only today</label>
-        <button class="big" id="addspecial">Put on the menu</button>
-        <div class="sh-sub">Customers can order it right away. It does not go to Petpooja, so ring it up on the POS yourself.</div>
-      </div>
-      <div class="lane">TODAY'S MENU</div>
-      <input class="sh-in" data-shop="q" placeholder="Search a dish to mark sold out" value="${esc(shopQ)}">
-      <div class="sh-list">${rows}</div>
-      ${changes}
-      <div class="lane">MORE</div>
-      <a class="sh-link" href="/admin" target="_blank" rel="noopener">Reviews, discount codes and WhatsApp numbers ›</a>
-    </main>`;
+    const changes = shopChanges.length ? `<div class="box"><h3>Price changes</h3>${shopChanges.slice(0, 8).map((c) => `<div class="chg">${esc(c.name)}${c.kind === "half" ? " (half)" : ""}: ${rs(c.old_price)} → <b>${rs(c.new_price)}</b><span>${day(utc(c.at))} ${time(utc(c.at))}</span></div>`).join("")}</div>` : "";
+    return `${topbar("Shop")}<main class="page"><div class="box">${status}</div>${changes}
+      <a class="sh-link" href="/admin" target="_blank" rel="noopener">Reviews, discount codes and WhatsApp numbers ›</a></main>${tabbar(g)}`;
   }
   async function loadShop() {
     try { const r = await api("/api/admin/menu-lite"); shopItems = r.items; shopChanges = r.changes || []; } catch (e) { if (e.message !== "auth") toast("Couldn't load the menu."); shopItems = shopItems || []; }
-    if (view === "shop") render();
+    if (tab === "menu" || tab === "shop") render();
   }
 
+  // ---------- sheet (replaces confirm() and tap-twice)
+  function sheetHtml() {
+    if (!sheet) return "";
+    return `<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-modal="true"><h2>${esc(sheet.title)}</h2>${sheet.body ? `<p>${esc(sheet.body)}</p>` : ""}
+      <button class="big ${sheet.cls || ""}" id="sheet-yes">${esc(sheet.yes)}</button><button class="big ghost" id="sheet-no">${esc(sheet.no || "Not yet")}</button></div></div>`;
+  }
+  function ask(s) { sheet = s; render(); }
+
+  // ---------- render
   function render() {
-    const g = groups();
-    const keepScroll = window.scrollY;
+    const g = groups(), keep = window.scrollY;
     let body;
-    if (view === "focus") {
-      const o = ((data && data.orders) || []).find((x) => x.id === focusOid);
-      if (!o) { view = "home"; return render(); }
-      const lbl = { new: "NEW", preparing: "COOKING", ready: "READY", out_for_delivery: "ON THE WAY", delivered: "DELIVERED", cancelled: "CANCELLED" }[o.status] || o.status;
-      body = topbar(g, `#${o.id} · ${lbl}`, true) + banner(queue()) + `<main class="list">${card(o)}</main>`;
-    } else if (view === "shop") body = topbar(g, "Shop", true) + shopView();
-    else if (view === "together") body = topbar(g, "Cook together", true) + banner(queue()) + togetherView(g);
-    else if (view === "later" || view === "done") {
-      const list = g[view];
-      body = topbar(g, view === "later" ? "Later" : "Done today", true) + banner(queue()) +
-        `<main class="list">${list.length ? list.map(card).join("") : `<div class="empty">${view === "later" ? "No orders booked for later." : "Nothing finished yet today."}</div>`}</main>`;
-    } else body = topbar(g, "", false) + homeView(g);
-    app.innerHTML = body;
-    window.scrollTo(0, keepScroll);
-    bind();
+    if (tab === "orders" && oid) {
+      const o = ((data && data.orders) || []).find((x) => x.id === oid);
+      if (!o) { oid = null; return render(); }
+      body = orderPage(o, g);
+    } else if (tab === "menu") body = menuView(g);
+    else if (tab === "shop") body = shopView(g);
+    else body = ordersView(g);
+    app.innerHTML = body + sheetHtml();
+    window.scrollTo(0, keep);
+    bind(); renderBanner();
   }
-
-  function whenLine(o) {
-    const placed = utc(o.created_at);
-    if (o.scheduled_at) {
-      const s = utc(o.scheduled_at);
-      const win = WINDOWS[o.scheduled_window];
-      return `<span class="later">For ${win ? win + ", " : time(s) + ", "}${day(s)}</span><div class="when">Placed ${time(placed)}, ${day(placed)}</div>`;
-    }
-    return `<div class="when">Placed ${time(placed)} · ${ago(placed)} · as soon as possible</div>`;
-  }
-
-  function billSec(o) {
-    const sub = num(o.subtotal), disc = num(o.discount_total), pack = num(o.packing_fee), gst = num(o.gst_amount);
-    const fee = num(o.delivery_fee), total = num(o.total), oldFare = num(o.delivery_fee_final);
-    const kitchen = sub - disc + pack;
-    let pay;
-    if (o.payment_method === "upi" && o.paid) pay = `<div class="paybox ok">✓ Paid ${rs(total)} by UPI</div>`;
-    else if (o.payment_method === "upi") pay = `<div class="paybox wait">UPI ${rs(total)}: not confirmed yet</div>`;
-    else pay = `<div class="paybox cash">Cash: collect ${rs(Math.ceil(total))}<small>${o.order_type === "pickup" ? "At the counter when they pick up." : "Tell the Porter rider to collect it, or ask the customer to pay by UPI."}</small></div>`;
-    const cost = num(o.courier_cost);
-    const porterBox = o.order_type === "delivery"
-      ? `<div><span>Delivery money (for Porter)</span><b>${rs(fee)}</b>${cost ? `<span>Porter cost ${rs(cost)} · ${cost > fee ? rs(cost - fee) + " extra from us" : rs(fee - cost) + " left over"}</span>` : ""}</div>` : "";
-    return `<div class="sec"><h3>Bill</h3><div class="bill">
-        ${(o.items || []).map((i) => `<div><span>${num(i.qty)} × ${esc(i.name)}</span><span>${rs(num(i.price) * num(i.qty))}</span></div>`).join("")}
-        ${disc ? `<div class="minus"><span>Discount${o.discount_code ? " (" + esc(o.discount_code) + ")" : ""}</span><span>−${rs(disc)}</span></div>` : ""}
-        ${pack ? `<div><span>Packing</span><span>${rs(pack)}</span></div>` : ""}
-        ${gst ? `<div><span>GST 5%</span><span>${rs(gst)}</span></div>` : ""}
-        ${o.order_type === "delivery" ? `<div><span>Delivery</span><span>${fee ? rs(fee) : "—"}</span></div>` : ""}
-        <div class="tot"><span>Customer pays</span><span>${rs(total)}</span></div>
-        ${oldFare ? `<div><span>+ Porter fare (old order)</span><span>${rs(oldFare)}</span></div>` : ""}
-      </div>
-      ${pay}
-      <div class="split">
-        <div><span>Kitchen keeps (food + packing)</span><b>${rs(kitchen)}</b></div>
-        <div><span>GST to set aside</span><b>${rs(gst)}</b></div>
-        ${porterBox || `<div><span>Delivery</span><b>Pickup</b></div>`}
-      </div></div>`;
-  }
-
-  // Opens the Porter / Rapido app on Android (falls back to the Play Store page).
-  // Neither app accepts a pre-filled drop location from outside, so the flow is:
-  // copy the location here, open the app, paste it into the Drop box.
-  const appLink = (pkg) => `intent://#Intent;package=${pkg};S.browser_fallback_url=${encodeURIComponent("https://play.google.com/store/apps/details?id=" + pkg)};end`;
-  const PORTER_PKG = "in.porter.customerapp", RAPIDO_PKG = "com.rapido.passenger";
-
-  function mapsLinks(o, addr, landmark) {
-    const dlat = parseFloat(o.delivery_lat), dlng = parseFloat(o.delivery_lng);
-    const k = (data && data.kitchen) || {};
-    const klat = parseFloat(k.lat), klng = parseFloat(k.lng);
-    const nearKitchen = isFinite(klat) && isFinite(dlat) && Math.abs(klat - dlat) < 0.0012 && Math.abs(klng - dlng) < 0.0012;
-    const hasPin = isFinite(dlat) && isFinite(dlng) && !nearKitchen;
-    const text = (addr + (landmark ? ", " + landmark : "")).trim();
-    return { hasPin, drop: hasPin ? `https://www.google.com/maps/search/?api=1&query=${dlat},${dlng}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(text)}` };
-  }
-
-  function porterSec(o) {
-    if (o.order_type !== "delivery") return "";
-    const [addr, landmark] = splitAddr(o.delivery_address);
-    const k = (data && data.kitchen) || {};
-    const m = mapsLinks(o, addr, landmark);
-    const booked = o.sr_tracking_url || o.sr_courier;
-    const flag = o.address_flagged ? `<div class="flag">⚠ ${esc(o.address_flag_reason || "Check this address.")} If it looks wrong, call the customer before booking.</div>` : "";
-    const noPin = m.hasPin ? "" : `<div class="flag">⚠ The customer did not drop an exact pin. Check the landmark or call before booking.</div>`;
-    const head = `<div class="sec"><h3>Deliver to</h3><div class="addr">${esc(addr)}</div>
-      ${landmark ? `<div class="hint">Landmark: ${esc(landmark)}</div>` : ""}
-      <a class="maplink" href="${m.drop}" target="_blank" rel="noopener">See it on the map</a>${noPin}${flag}`;
-    if (booked) {
-      return head + `<div class="rider" style="margin-top:10px">🛵 ${esc(o.sr_courier || "Rider booked")}${o.sr_tracking_url ? ` · <a href="${esc(o.sr_tracking_url)}" target="_blank" rel="noopener">rider link</a>` : ""}</div></div>`;
-    }
-    if (!["preparing", "ready"].includes(o.status)) return head + `</div>`;
-    const cashNote = o.payment_method === "upi" && o.paid ? "Already paid. Rider collects nothing."
-      : o.payment_method === "upi" ? `UPI not confirmed yet. Check before the rider leaves.`
-      : `Rider collects ${rs(Math.ceil(num(o.total)))} cash.`;
-    const d = drafts[o.id] || {};
-    const dropText = addr + (landmark ? " (Landmark: " + landmark + ")" : "");
-    const row = (label, value, copyText, btn) => `<div class="step-row"><div class="sr-l">${label}</div><div class="sr-v">${esc(value)}</div>
-      <button class="copy" data-copy="${esc(copyText)}">${btn}</button></div>`;
-    return head + `</div><div class="sec porter"><h3>Book a rider</h3>
-      <div class="how"><b>How:</b> tap each green <b>Copy</b> button, open the app, and paste it in the matching box.</div>
-      <div class="openapps">
-        <a class="openapp" href="${appLink(PORTER_PKG)}">Open Porter</a>
-        <a class="openapp" href="${appLink(RAPIDO_PKG)}">Open Rapido</a>
-      </div>
-      ${row("1 · Pickup (kitchen)", k.address || "", k.address || "", "Copy pickup")}
-      ${row("2 · Drop (customer)", dropText, m.hasPin ? m.drop : dropText, m.hasPin ? "Copy map location" : "Copy drop address")}
-      ${m.hasPin ? row("   or the address as text", dropText, dropText, "Copy address") : ""}
-      ${row("3 · Receiver", (o.customer_name || "Customer") + " · " + prettyPhone(o.customer_phone), phone10(o.customer_phone).slice(-10), "Copy number")}
-      <div class="how" style="margin-top:12px"><b>Tell the rider:</b> ${cashNote}</div>
-      <div class="how">After booking, tap <b>Share</b> in the app, copy the tracking link and paste it below.</div>
-      <div class="field"><label for="link-${o.id}">Rider tracking link</label>
-        <input id="link-${o.id}" data-draft="link" data-id="${o.id}" inputmode="url" placeholder="https://..." value="${esc(d.link || "")}"></div>
-      <div class="field"><label for="fare-${o.id}">What the rider app charged (₹)</label>
-        <input id="fare-${o.id}" data-draft="fare" data-id="${o.id}" inputmode="decimal" placeholder="e.g. 62" value="${esc(d.fare || "")}">
-        <div class="hint">Only for our accounts. The customer already paid ${rs(o.delivery_fee)} for delivery and is not charged again.</div></div>
-      <button class="big blue" data-dispatch="${o.id}" style="margin-top:12px">I booked the rider: send link to customer</button>
-      <div class="tells">The customer gets: “Your order is on its way” with the rider's live link.</div>
-    </div>`;
-  }
-
-  // Steps shown as a strip so it is obvious where the order is.
-  function steps(o) {
-    const del = o.order_type === "delivery";
-    const names = del ? ["Accepted", "Cooking", "Rider on the way", "Delivered"] : ["Accepted", "Cooking", "Ready", "Picked up"];
-    const idx = { new: 0, preparing: 1, ready: del ? 1 : 2, out_for_delivery: 2, delivered: 4 }[o.status];
-    if (idx === undefined) return "";
-    return `<div class="steps">${names.map((n, i) => `<div class="stp ${i < idx ? "done" : i === idx ? "now" : ""}"><i>${i < idx ? "✓" : i + 1}</i><span>${n}</span></div>`).join("")}</div>`;
-  }
-
-  // Money first: the one thing that blocks the owner.
-  function payNow(o) {
-    if (!needsMoney(o)) return "";
-    const total = rs(o.total);
-    return `<div class="paynow"><div class="pn-k">💰 CHECK THE MONEY FIRST</div>
-      <div class="pn-t">Did ${esc(o.customer_name || "the customer")} pay ${total}?</div>
-      <div class="pn-s">Open your UPI app (GPay / PhonePe). Look for <b>${total}</b>. Tap the green button only when you can see it.</div>
-      <button class="big pay" data-paid="${o.id}" data-confirm="Tap again to confirm. The customer is told you got ${total}.">Yes, I got ${total}</button>
-      <div class="pn-s" style="margin-top:8px">Not there after a few minutes? <a href="tel:+${waNum(o.customer_phone)}"><b>Call ${prettyPhone(o.customer_phone)}</b></a></div></div>`;
-  }
-
-  // One plain-language "what to do now" block with the single main button.
-  function nextStep(o) {
-    const del = o.order_type === "delivery";
-    const btn = (st, label, cls) => `<button class="big ${cls || ""}" data-do="${st}" data-id="${o.id}">${label}</button>`;
-    let k, t, b = "", warn = false;
-    if (o.status === "new") {
-      k = "NEXT"; t = "Accept this order and start cooking"; b = btn("preparing", "Accept order") + `<div class="tells">The customer gets: “The kitchen has accepted your order.”</div>`;
-    } else if (o.status === "preparing") {
-      k = "NEXT"; t = del ? "Cook it and pack it. Then tap below." : "Cook it. Tap below when it is packed.";
-      b = btn("ready", del ? "Food is packed and ready" : "Food is ready for pickup") + `<div class="tells">${del ? "The customer gets: “Packed and ready. We're booking your rider.”" : "The customer gets: “Your order is ready to collect.”"}</div>`;
-    } else if (o.status === "ready" && !del) {
-      k = "WAITING"; t = "Waiting for the customer to come and collect it."; b = btn("delivered", "Customer has collected it ✓", "blue");
-    } else if (o.status === "ready" && del) {
-      k = "NEXT"; t = (o.sr_tracking_url || o.sr_courier) ? "Rider is booked. Waiting for pickup." : "Book a rider. Steps are in “Book a rider” below ⬇"; 
-    } else if (o.status === "out_for_delivery") {
-      k = "ON THE WAY"; warn = true; t = "The rider has the food. It has NOT reached the customer yet.";
-      b = `<div class="warn">Tap the button below only AFTER the customer has the food in their hand.</div>` + btn("delivered", "Customer has received the food ✓", "blue") + `<div class="tells">Tapping this tells the customer “Delivered” and asks them to rate. You cannot undo it.</div>`;
-    } else return "";
-    return `<div class="next ${warn ? "warnbox" : ""}"><div class="nx-k">${k}</div><div class="nx-t">${t}</div>${b}</div>`;
-  }
-
-  function actions(o) {
-    const minor = [`<a href="${esc(o.track_url)}" target="_blank" rel="noopener">Customer's tracking page</a>`];
-    if (o.status === "ready" && o.order_type === "delivery") minor.push(`<button data-do="delivered" data-id="${o.id}" data-confirm="Mark delivered without a rider?">Delivered without a rider</button>`);
-    if (["new", "preparing"].includes(o.status)) minor.push(`<button class="danger" data-do="cancelled" data-id="${o.id}" data-confirm="Cancel order #${o.id}? The customer is told.">Cancel order</button>`);
-    return `<div class="act"><div class="minor">${minor.join("")}</div></div>`;
-  }
-
-  function card(o) {
-    const label = { new: "NEW", preparing: "COOKING", ready: "READY", out_for_delivery: "ON THE WAY", delivered: "DELIVERED", cancelled: "CANCELLED" }[o.status] || o.status;
-    const note = (o.instructions || "").trim();
-    const itemNotes = (o.items || []).filter((i) => i.note).map((i) => `${esc(i.name)}: ${esc(i.note)}`);
-    return `<article class="card s-${o.status}" id="o-${o.id}">
-      <div class="sec"><div class="head"><div><div class="oid">#${o.id}</div>${whenLine(o)}</div>
-        <div class="pills"><span class="pill p-${o.status}">${label}</span><span class="pill p-type">${o.order_type === "pickup" ? "PICKUP" : "DELIVERY"}</span></div></div></div>
-      ${OPEN.includes(o.status) ? `<div class="sec nx-wrap">${steps(o)}${payNow(o)}${nextStep(o)}</div>` : ""}
-      <div class="sec cust"><div><b>${esc(o.customer_name || "Customer")}</b><div class="ph">${prettyPhone(o.customer_phone)}</div></div>
-        <div class="cbtns"><a href="tel:+${waNum(o.customer_phone)}">📞 Call</a><a href="https://wa.me/${waNum(o.customer_phone)}" target="_blank" rel="noopener">WhatsApp</a></div></div>
-      <div class="sec"><ul class="items">${(o.items || []).map((i) => `<li><span class="q">${num(i.qty)}×</span><span>${esc(i.name)}</span></li>`).join("")}</ul>
-        ${offPos(o) ? `<div class="note">⭐ Has a special that is not on Petpooja. Ring it up on the POS yourself.</div>` : ""}
-        ${note || itemNotes.length ? `<div class="note">📝 ${[esc(note), ...itemNotes].filter(Boolean).join("<br>")}</div>` : ""}</div>
-      ${o.feedback ? `<div class="sec"><span class="pill ${o.feedback.rating === "bad" ? "p-cancelled" : o.feedback.rating === "good" ? "p-preparing" : "p-new"}">${{ good: "😋 Loved it", ok: "🙂 It was okay", bad: "😕 Not great" }[o.feedback.rating] || ""}</span>${o.feedback.comment ? `<div class="note" style="margin-top:8px">“${esc(o.feedback.comment)}”</div>` : ""}</div>` : ""}
-      ${porterSec(o)}
-      ${billSec(o)}
-      ${OPEN.includes(o.status) ? actions(o) : `<div class="act"><div class="minor"><a href="${esc(o.track_url)}" target="_blank" rel="noopener">Customer's tracking page</a></div></div>`}
-    </article>`;
-  }
+  function openOrder(id) { tab = "orders"; oid = id; sheet = null; render(); window.scrollTo(0, 0); }
+  function goTab(t) { tab = t; oid = null; sheet = null; if (t !== "orders" && shopItems === null) loadShop(); else if (t !== "orders") loadShop(); render(); window.scrollTo(0, 0); }
 
   // ---------- actions
-  const pendingConfirm = {};
+  const DONE_MSG = (id) => ({ preparing: `Order #${id} accepted. Customer told.`, ready: `#${id} marked packed. Customer told.`, delivered: `#${id} done 🎉`, cancelled: `#${id} cancelled. Customer told.` });
+  function setStatus(btn, id, st) { return act(btn, () => api(`/api/admin/orders/${id}/status`, { method: "POST", body: JSON.stringify({ status: st }) }), DONE_MSG(id)[st]); }
   function bind() {
-    const pa = document.getElementById("payalert");
-    if (pa) pa.onclick = () => { const o = groups().now.find(needsMoney); const el = o && document.getElementById("o-" + o.id); if (el) { el.scrollIntoView({ block: "start", behavior: "smooth" }); window.scrollBy(0, -150); el.classList.add("flash"); } };
-    const go = (v, id) => { view = v; focusOid = id || null; render(); window.scrollTo(0, 0); };
-    const bk = document.getElementById("back"); if (bk) bk.onclick = () => go("home");
-    app.querySelectorAll("[data-view]").forEach((b) => b.onclick = () => { go(b.dataset.view); if (b.dataset.view === "shop") loadShop(); });
+    const bk = document.getElementById("back"); if (bk) bk.onclick = () => { oid = null; render(); window.scrollTo(0, 0); };
+    app.querySelectorAll("[data-tab]").forEach((b) => b.onclick = () => goTab(b.dataset.tab));
+    app.querySelectorAll("[data-open]").forEach((b) => b.onclick = () => openOrder(+b.dataset.open));
+    const td = document.getElementById("toggledone"); if (td) td.onclick = () => { showDone = !showDone; render(); };
+    const s1 = document.getElementById("sound");
+    if (s1) s1.onclick = () => { soundOn = !soundOn; try { localStorage.setItem(SOUND_KEY, soundOn ? "1" : "0"); } catch (_) {} unlockSound(); if (soundOn) ring(); render(); };
+
+    // sheet
+    const no = document.getElementById("sheet-no"), yes = document.getElementById("sheet-yes"), scrim = document.getElementById("scrim");
+    if (no) no.onclick = () => { sheet = null; render(); };
+    if (scrim) scrim.onclick = (e) => { if (e.target === scrim) { sheet = null; render(); } };
+    if (yes) yes.onclick = () => { const s = sheet; sheet = null; render(); s.run(yes); };
+
+    // order actions
+    app.querySelectorAll("[data-do]").forEach((b) => b.onclick = () => setStatus(b, b.dataset.id, b.dataset.do));
+    app.querySelectorAll("[data-ask]").forEach((b) => b.onclick = () => {
+      const id = b.dataset.id, st = b.dataset.ask;
+      if (st === "delivered") ask({ title: "Did the customer get the food?", body: "The customer is told “Delivered” and asked to rate. You cannot undo this.", yes: "Yes, delivered", cls: "blue", run: (x) => setStatus(x, id, st) });
+      else ask({ title: `Cancel order #${id}?`, body: "The customer is told it is cancelled.", yes: "Yes, cancel it", no: "No, keep it", cls: "red", run: (x) => setStatus(x, id, st) });
+    });
+    app.querySelectorAll("[data-paid]").forEach((b) => b.onclick = () => {
+      const id = b.dataset.paid, o = ((data && data.orders) || []).find((x) => x.id === +id);
+      ask({ title: `Did you see ${rs(o && o.total)} in your UPI app?`, body: "The customer is told you got it.", yes: `Yes, I got ${rs(o && o.total)}`, run: (x) => act(x, () => api(`/api/admin/orders/${id}/paid`, { method: "POST" }), "Payment noted. Customer thanked.") });
+    });
+    const payMsg = (o) => `Hi ${firstName(o)}, this is the kitchen. Your order #${o.id} is ${rs(o.total)}. You can pay by UPI here: ${o.pay_url}`;
+    app.querySelectorAll("[data-paylink]").forEach((b) => b.onclick = () => {
+      const o = ((data && data.orders) || []).find((x) => x.id === +b.dataset.paylink);
+      if (o) window.open(`https://wa.me/${waNum(o.customer_phone)}?text=${encodeURIComponent(payMsg(o))}`, "_blank", "noopener");
+    });
+    app.querySelectorAll("[data-copypay]").forEach((b) => b.onclick = async () => {
+      const o = ((data && data.orders) || []).find((x) => x.id === +b.dataset.copypay);
+      try { await navigator.clipboard.writeText(o.pay_url); toast("Link copied."); } catch (_) { toast("Couldn't copy. Use the WhatsApp button."); }
+    });
+
+    // rider booking
+    app.querySelectorAll("[data-bookapp]").forEach((b) => b.onclick = async () => {
+      const o = ((data && data.orders) || []).find((x) => x.id === +b.dataset.bookapp); if (!o) return;
+      const text = splitDrop(o.delivery_address).search, rapido = b.dataset.pkg === "rapido";
+      try { await navigator.clipboard.writeText(text); toast("Address copied. Paste it in Drop."); } catch (_) { toast("Couldn't copy. Press and hold the address instead."); return; }
+      location.href = appLink(rapido ? RAPIDO_PKG : PORTER_PKG);
+    });
+    const draftOf = (id) => (drafts[id] = drafts[id] || {});
+    const refreshLink = (id) => {
+      const d = draftOf(id), c = cleanLink(d.link), el = document.getElementById("found-" + id), sb = document.getElementById("send-" + id);
+      if (el) el.innerHTML = c.state === "ok" ? `<div class="found ok">✓ Found the rider link</div>` : c.state === "unknown" ? `<div class="found unknown">Found a link, but not a Porter or Rapido one. Check it.</div>` : c.state === "store" ? `<div class="found bad">That is the app-store link, not the rider link.</div>` : c.state === "none" ? `<div class="found bad">No link in that yet.</div>` : "";
+      if (sb) sb.disabled = !(c.state === "ok" || c.state === "unknown");
+    };
+    app.querySelectorAll("[data-draft]").forEach((i) => i.oninput = () => { draftOf(i.dataset.id)[i.dataset.draft] = i.value; if (i.dataset.draft === "link") refreshLink(i.dataset.id); });
+    app.querySelectorAll("[data-readclip]").forEach((b) => b.onclick = async () => {
+      const id = b.dataset.readclip;
+      try { draftOf(id).link = await navigator.clipboard.readText(); const i = document.getElementById("link-" + id); if (i) i.value = draftOf(id).link; refreshLink(id); }
+      catch (_) { toast("Phone said no. Press and hold the box and choose Paste."); }
+    });
+    app.querySelectorAll("[data-dispatch]").forEach((b) => b.onclick = () => {
+      const id = b.dataset.dispatch, d = drafts[id] || {}, c = cleanLink(d.link), fare = parseFloat(d.fare);
+      if (!(c.state === "ok" || c.state === "unknown")) { toast("Paste the rider message first."); return; }
+      act(b, () => api(`/api/admin/orders/${id}/manual-dispatch`, { method: "POST", body: JSON.stringify({ tracking_url: c.url, fare: fare > 0 ? fare : null }) }),
+        "Rider link sent to the customer 🛵", () => { delete drafts[id]; });
+    });
+
+    // menu + shop
     app.querySelectorAll("[data-shop]").forEach((i) => i.oninput = () => {
       const k = i.dataset.shop;
-      if (k === "onlyToday") shopDraft.onlyToday = i.checked; else if (k === "q") { shopQ = i.value; const pos = i.selectionStart; render(); const n = app.querySelector('[data-shop="q"]'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } } else shopDraft[k] = i.value;
+      if (k === "onlyToday") shopDraft.onlyToday = i.checked;
+      else if (k === "q") { shopQ = i.value; clearTimeout(bind.t); bind.t = setTimeout(() => { const pos = i.selectionStart; render(); const n = app.querySelector('[data-shop="q"]'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } }, 200); }
+      else shopDraft[k] = i.value;
     });
     app.querySelectorAll("[data-close]").forEach((b) => b.onclick = () => {
       const [mode, h] = b.dataset.close.split(":");
-      act(b, () => api("/api/admin/store", { method: "POST", body: JSON.stringify({ is_open: false, mode, hours: h ? +h : null, reason: shopDraft.reason }) }).then((r) => { shopDraft.reason = ""; if (data) data.store = r; }),
-        "Online orders are off.");
+      act(b, () => api("/api/admin/store", { method: "POST", body: JSON.stringify({ is_open: false, mode, hours: h ? +h : null, reason: shopDraft.reason }) }).then((r) => { shopDraft.reason = ""; if (data) data.store = r; }), "Online orders are off.");
     });
     app.querySelectorAll("[data-open-shop]").forEach((b) => b.onclick = () => act(b, () => api("/api/admin/store", { method: "POST", body: JSON.stringify({ is_open: true }) }).then((r) => { if (data) data.store = r; }), "Online orders are back on."));
     const sp = document.getElementById("addspecial");
@@ -476,106 +439,57 @@
       const price = parseFloat(shopDraft.price);
       if (!shopDraft.name.trim()) { toast("Type the dish name."); return; }
       if (!(price > 0)) { toast("Type the price in rupees."); return; }
-      act(sp, () => api("/api/admin/custom-items", { method: "POST", body: JSON.stringify({ name: shopDraft.name, price, only_today: shopDraft.onlyToday }) }).then(async () => { shopDraft.name = ""; shopDraft.price = ""; await loadShop(); }),
-        "Added. Customers can order it now.");
+      act(sp, () => api("/api/admin/custom-items", { method: "POST", body: JSON.stringify({ name: shopDraft.name, price, only_today: shopDraft.onlyToday }) }).then(async () => { shopDraft.name = ""; shopDraft.price = ""; await loadShop(); }), "Added. Customers can order it now.");
     };
-    app.querySelectorAll("[data-so]").forEach((b) => b.onclick = () => act(b, () => api("/api/admin/sold-out", { method: "POST", body: JSON.stringify({ item_id: b.dataset.so, sold_out: b.dataset.now === "1" }) }).then(loadShop),
-      b.dataset.now === "1" ? "Marked sold out." : "Back on the menu."));
+    app.querySelectorAll("[data-so]").forEach((b) => b.onclick = () => act(b, () => api("/api/admin/sold-out", { method: "POST", body: JSON.stringify({ item_id: b.dataset.so, sold_out: b.dataset.now === "1" }) }).then(loadShop), b.dataset.now === "1" ? "Marked sold out." : "Back on the menu."));
     app.querySelectorAll("[data-edit]").forEach((b) => b.onclick = () => { editId = b.dataset.edit; render(); const i = document.getElementById("pe-price"); if (i) { i.focus(); i.select(); } });
+    app.querySelectorAll("[data-rm]").forEach((b) => b.onclick = () => act(b, () => api("/api/admin/custom-items/" + encodeURIComponent(b.dataset.rm), { method: "DELETE" }).then(loadShop), "Removed."));
     app.querySelectorAll("[data-pe]").forEach((b) => b.onclick = () => {
       const id = b.dataset.id, d = (shopItems || []).find((x) => x.id === (id || editId));
       if (b.dataset.pe === "cancel") { editId = null; render(); return; }
-      if (b.dataset.pe === "reset") {
-        act(b, () => api("/api/admin/prices/" + encodeURIComponent(id), { method: "DELETE" }).then(async () => { editId = null; await loadShop(); }), "Back to the original price.");
-        return;
-      }
+      if (b.dataset.pe === "reset") { act(b, () => api("/api/admin/prices/" + encodeURIComponent(id), { method: "DELETE" }).then(async () => { editId = null; await loadShop(); }), "Back to the original price."); return; }
       const price = parseFloat(document.getElementById("pe-price").value);
       const hEl = document.getElementById("pe-half"), half = hEl ? parseFloat(hEl.value) : null;
       if (!(price > 0) || (hEl && !(half > 0))) { toast("Type the price in rupees."); return; }
       if (price === d.price && (!hEl || half === d.half)) { editId = null; render(); return; }
-      if (!confirm(`Change ${d.name} from ${rs(d.price)} to ${rs(price)}${hEl && half !== d.half ? ` (half ${rs(half)})` : ""}? Customers see it right away.`)) return;
-      act(b, () => api("/api/admin/prices", { method: "POST", body: JSON.stringify({ item_id: id, price, half_price: hEl ? half : null }) }).then(async () => { editId = null; await loadShop(); }), "Price changed.");
-    });
-    app.querySelectorAll("[data-rm]").forEach((b) => b.onclick = () => act(b, () => api("/api/admin/custom-items/" + encodeURIComponent(b.dataset.rm), { method: "DELETE" }).then(loadShop), "Removed."));
-    app.querySelectorAll("[data-open]").forEach((b) => b.onclick = () => go("focus", +b.dataset.open));
-    const sm = document.getElementById("showmore"); if (sm) sm.onclick = () => { showMore = true; render(); };
-    app.querySelectorAll("[data-plate]").forEach((b) => b.onclick = () => { const k = b.dataset.plate; plated.has(k) ? plated.delete(k) : plated.add(k); render(); });
-    app.querySelectorAll("[data-accept]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); const id = b.dataset.accept;
-      act(b, () => api(`/api/admin/orders/${id}/status`, { method: "POST", body: JSON.stringify({ status: "preparing" }) }), `Order #${id} accepted. Customer told.`); });
-    const toggle = () => { soundOn = !soundOn; try { localStorage.setItem(SOUND_KEY, soundOn ? "1" : "0"); } catch (_) {} unlockSound(); if (soundOn) ring(); render(); };
-    const s1 = document.getElementById("sound"), s2 = document.getElementById("sound2");
-    if (s1) s1.onclick = toggle; if (s2) s2.onclick = toggle;
-    app.querySelectorAll("[data-copy]").forEach((b) => b.onclick = async () => {
-      try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = "Copied ✓"; b.classList.add("done"); toast("Copied. Now open the app and paste it."); }
-      catch (_) { toast("Couldn't copy. Press and hold the text instead."); }
-    });
-    app.querySelectorAll("[data-draft]").forEach((i) => i.oninput = () => { (drafts[i.dataset.id] = drafts[i.dataset.id] || {})[i.dataset.draft] = i.value; });
-    app.querySelectorAll('[data-do="delivered"]').forEach((b) => { if (!b.dataset.confirm) b.dataset.confirm = "1"; });
-    app.querySelectorAll("[data-do]").forEach((b) => b.onclick = () => {
-      const id = b.dataset.id, st = b.dataset.do;
-      if (b.dataset.confirm && pendingConfirm[id + st] !== true) {
-        pendingConfirm[id + st] = true; b.textContent = "Tap again to confirm"; b.classList.add("sure");
-        setTimeout(() => { delete pendingConfirm[id + st]; }, 5000); return;
-      }
-      delete pendingConfirm[id + st];
-      act(b, () => api(`/api/admin/orders/${id}/status`, { method: "POST", body: JSON.stringify({ status: st }) }),
-        { preparing: `Order #${id} accepted. Customer told.`, ready: `#${id} marked ready. Customer told.`, delivered: `#${id} done 🎉`, cancelled: `#${id} cancelled. Customer told.` }[st]);
-    });
-    app.querySelectorAll("[data-paid]").forEach((b) => b.onclick = () => {
-      const id = b.dataset.paid;
-      if (b.dataset.confirm && pendingConfirm[id + "paid"] !== true) {
-        pendingConfirm[id + "paid"] = true; b.dataset.label = b.textContent; b.textContent = "Tap again to confirm"; b.classList.add("sure");
-        setTimeout(() => { delete pendingConfirm[id + "paid"]; if (b.isConnected) { b.textContent = b.dataset.label; b.classList.remove("sure"); } }, 5000); return;
-      }
-      delete pendingConfirm[id + "paid"];
-      act(b, () => api(`/api/admin/orders/${id}/paid`, { method: "POST" }), "Payment noted. Customer thanked.");
-    });
-    app.querySelectorAll("[data-dispatch]").forEach((b) => b.onclick = () => {
-      const id = b.dataset.dispatch, d = drafts[id] || {};
-      const link = (d.link || "").trim(), fare = parseFloat(d.fare);
-      if (!link) { toast("Paste the Porter tracking link first."); document.getElementById("link-" + id)?.focus(); return; }
-      if (!/^https?:\/\//.test(link)) { toast("The link should start with https://"); return; }
-      act(b, () => api(`/api/admin/orders/${id}/manual-dispatch`, { method: "POST", body: JSON.stringify({ tracking_url: link, fare: fare > 0 ? fare : null }) }),
-        "Rider link sent to the customer 🛵", () => { delete drafts[id]; });
+      ask({ title: `Change ${d.name} to ${rs(price)}?`, body: `Now ${rs(d.price)}${hEl && half !== d.half ? `, half ${rs(half)}` : ""}. Customers see the new price right away.`, yes: "Yes, change it", no: "No", run: (x) => act(x, () => api("/api/admin/prices", { method: "POST", body: JSON.stringify({ item_id: id, price, half_price: hEl ? half : null }) }).then(async () => { editId = null; await loadShop(); }), "Price changed.") });
     });
   }
 
   async function act(btn, call, okMsg, after) {
-    btn.disabled = true; const old = btn.textContent; btn.textContent = "Saving…";
-    try { await call(); if (after) after(); toast(okMsg || "Done"); await load(); }
-    catch (e) { if (e.message !== "auth") { toast(e.message, 5000); btn.disabled = false; btn.textContent = old; } }
+    const old = btn && btn.isConnected ? btn.textContent : null;
+    if (old !== null) { btn.disabled = true; btn.textContent = "Saving…"; }
+    try { await call(); if (after) after(); toast(okMsg || "Done"); await load(true); }
+    catch (e) { if (e.message !== "auth") { toast(e.message, 5000); if (old !== null && btn.isConnected) { btn.disabled = false; btn.textContent = old; } } }
   }
 
   // ---------- polling
-  async function load() {
+  async function load(force) {
     const fresh = await api("/api/admin/kitchen");
-    const ids = new Set(fresh.orders.map((o) => o.id));
+    lastOk = Date.now();
     const newOnes = seen ? fresh.orders.filter((o) => !seen.has(o.id) && o.status === "new") : [];
     const firstLoad = !seen;
-    seen = ids; data = fresh;
+    seen = new Set(fresh.orders.map((o) => o.id)); data = fresh;
     if (firstLoad && focusId) {
-      if (fresh.orders.some((o) => o.id === focusId)) { view = "focus"; focusOid = focusId; }
-      else toast(`Order #${focusId} isn't open any more.`);
+      if (fresh.orders.some((o) => o.id === focusId)) { tab = "orders"; oid = focusId; } else toast(`Order #${focusId} isn't open any more.`);
       focusId = null;
     }
-    const typing = document.activeElement && document.activeElement.matches("input[data-draft], input[data-shop], #pe-price, #pe-half");
-    if (!typing) render();
+    const typing = !force && document.activeElement && document.activeElement.matches("input, textarea");
+    if (typing) renderBanner(); else render();   // the banner still updates while she types
     if (newOnes.length) {
-      // One chime. The banner (render) shows the order; nothing takes over the screen.
       ring();
       document.title = "🔔 New order · Kitchen"; setTimeout(() => { document.title = "Kitchen"; }, 15000);
     }
   }
-  setInterval(() => { const c = document.getElementById("clock"); if (c) c.textContent = clock(); }, 20000);
   let timer = null;
   function start() {
     app.innerHTML = `<div class="empty">Loading orders…</div>`;
-    load().catch((e) => { if (e.message !== "auth") app.innerHTML = `<div class="empty">Couldn't load orders. Check the internet and pull down to retry.</div>`; });
+    load().catch((e) => { if (e.message !== "auth") app.innerHTML = `<div class="empty">Couldn't load orders. Check the internet.</div>`; });
     clearInterval(timer);
-    timer = setInterval(() => { if (token) load().catch(() => {}); }, 15000);
+    timer = setInterval(() => { if (token) load().catch(() => renderBanner()); }, 15000);
   }
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && token) load().catch(() => {}); });
+  setInterval(renderBanner, 10000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && token) load().catch(() => renderBanner()); });
   document.addEventListener("click", unlockSound, { once: true });
-
   if (token) start(); else renderLogin();
 })();

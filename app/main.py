@@ -1198,18 +1198,21 @@ def admin_menu_lite(x_admin_token: str | None = Header(None)):
     """Everything the kitchen's Menu tab needs: per dish, is it on or sold out today."""
     _check_admin(x_admin_token)
     base = {m["id"]: m for m in menu.base_menu()}
+    photos = dish_photo_ids()
     out = []
     for g in menu.grouped():
         for it in g["items"]:
             if it["id"].endswith(menu.HALF_SUFFIX):
                 continue
+            pid = it.get("photo_id") or it["id"]
             b = base.get(it["id"], {})
             full = menu.get_item(it["id"]) or it
             out.append({"id": it["id"], "name": it["name"], "group": g["group"], "price": it["price"],
                         "original": b.get("price", it["price"]),
                         "half": full.get("half_price"), "original_half": b.get("half_price"),
                         "available": it["available"], "custom": bool(it.get("custom")),
-                        "reason": it.get("unavailable_reason")})
+                        "reason": it.get("unavailable_reason"),
+                        "photo": f"/static/img/dishes/{pid}.jpg" if pid in photos else None})
     return {"items": out, "changes": db.recent_price_changes()}
 
 

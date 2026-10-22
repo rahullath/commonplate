@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from . import db, menu
+from .links import extract_tracking_url
 from .config import (
     DELIVERY_ZONES,
     FREE_DELIVERY_ABOVE,
@@ -547,8 +548,11 @@ def record_manual_dispatch(order_id: int, tracking_url: str, rider_name: str = "
     rider, mark out_for_delivery. Returns the dispatch dict notify_dispatch wants."""
     _dispatchable_order(order_id)
     tracking_url = (tracking_url or "").strip()
-    if tracking_url and not tracking_url.startswith(("https://", "http://")):
-        raise OrderError("Tracking link must start with https://", 400)
+    if tracking_url:
+        found = extract_tracking_url(tracking_url)
+        if found["state"] in ("none", "store"):
+            raise OrderError("That doesn't have a rider link in it. Copy the link from Share and paste again.", 400)
+        tracking_url = found["url"]
     courier = "Porter" + (f" · {rider_name.strip()}" if rider_name.strip() else "")
     db.update_order_dispatch(order_id=order_id, sr_order_id=None,
                              awb=rider_phone.strip(), courier=courier,

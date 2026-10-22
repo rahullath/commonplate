@@ -19,6 +19,7 @@ import os
 import re
 
 from .config import ADMIN_PHONE, WHATSAPP_ACTIVE
+from .links import extract_tracking_url
 
 log = logging.getLogger("kitchen")
 
@@ -227,7 +228,7 @@ _PHONE = re.compile(r"(?<!\d)(?:\+?91[\s-]?)?([6-9]\d{4}[\s-]?\d{5})(?!\d)")
 
 def looks_like_tracking_link(text: str) -> bool:
     """A courier link and/or a fare ("₹86", "Rs 86", "fare 86") from the owner."""
-    return bool(_URL.search(text or "") or _FARE.search(text or ""))
+    return bool(extract_tracking_url(text or "")["url"] or _FARE.search(text or ""))
 
 
 def _fare(text: str) -> float | None:
@@ -242,8 +243,8 @@ def handle_admin_tracking_link(text: str) -> str:
     rider yet) — "#<id>" picks one when several wait. Fare alone: the order
     that has a rider but no fare yet. Returns the reply for the owner."""
     from . import db, orders
-    m_url = _URL.search(text)
-    url = m_url.group(0).rstrip(").,") if m_url else ""
+    found = extract_tracking_url(text)
+    url = found["url"] if found["state"] in ("ok", "unknown") else ""
     fare = _fare(text)
     ref = _ORDER_REF.search(text)
     today = [o for o in db.today_orders() if o.get("order_type") == "delivery"]
