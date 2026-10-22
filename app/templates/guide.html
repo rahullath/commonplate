@@ -49,13 +49,13 @@ pre code{background:none;padding:0}
   {% endif %}
   <p>commonplate is direct ordering for small kitchens: menu, cart, UPI or cash checkout, a kitchen screen, tracking and WhatsApp updates. No commission, no middleman, open source.</p>
   <p>
-    <a class="cta" href="{{ demo_url }}" rel="noopener" target="_blank">See a live kitchen: {{ demo_url.split('//')[1] }}</a>
+    {% if demo_url %}<a class="cta" href="{{ demo_url }}" rel="noopener" target="_blank">See a live kitchen: {{ demo_url.split('//')[1] }}</a>{% endif %}
     <a class="cta alt" href="/menu">Try the sample menu here</a>
   </p>
 
   <section class="step">
     <h2>1. See it working</h2>
-    <p>The live demo at <a href="{{ demo_url }}" rel="noopener" target="_blank">{{ demo_url.split('//')[1] }}</a> is a real kitchen running this code. Place a test order there, then open its kitchen screen to see the other side. On this deployment, <a href="/menu">/menu</a> shows the sample kitchen and <code>/kitchen</code> is the kitchen screen (it asks for your <code>ADMIN_TOKEN</code>).</p>
+    <p>{% if demo_url %}The live demo at <a href="{{ demo_url }}" rel="noopener" target="_blank">{{ demo_url.split('//')[1] }}</a> is a kitchen running this code. Place a test order there, then open its kitchen screen to see the other side. {% endif %}On this deployment, <a href="/menu">/menu</a> shows the sample kitchen and <code>/kitchen</code> is the kitchen screen (it asks for your <code>ADMIN_TOKEN</code>).</p>
   </section>
 
   <section class="step">
@@ -89,7 +89,7 @@ docker run -p 8000:8000 -v commonplate-data:/data \
 
   <section class="step">
     <h2>Stuck, or not sure which option fits?</h2>
-    <p>Email <a href="mailto:{{ contact_email }}">{{ contact_email }}</a> and say what kind of kitchen you run. Code and issues: <a href="{{ repo }}" rel="noopener">GitHub</a>. More on the idea: <a href="/commonplate">about commonplate</a>.</p>
+    <p>{% if contact_email %}Email <a href="mailto:{{ contact_email }}">{{ contact_email }}</a> and say what kind of kitchen you run. {% endif %}Code and issues: <a href="{{ repo }}" rel="noopener">GitHub</a>. More on the idea: <a href="/commonplate">about commonplate</a>.</p>
   </section>
 </main>
 </body>

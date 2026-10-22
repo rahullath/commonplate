@@ -3,9 +3,13 @@
 All figures on the page are sample data and the page says so. Kept here, not in
 the template, so the interactive demos and the crawlable text share one source.
 """
+import os
+
 SITE_REPO = "https://github.com/rahullath/commonplate"
-DEMO_URL = "https://tulsifoods.app"
-CONTACT_EMAIL = "rahullath02@gmail.com"
+# Both optional. Set them to show a "live kitchen" link and a contact address on the project
+# page and guide; left empty, those links are not rendered.
+DEMO_URL = os.environ.get("COMMONPLATE_DEMO_URL", "").strip().rstrip("/")
+CONTACT_EMAIL = os.environ.get("COMMONPLATE_CONTACT_EMAIL", "").strip()
 
 KLINES = {
     "app": [
