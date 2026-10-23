@@ -8,8 +8,20 @@
 <main class="page" style="max-width:900px;margin:0 auto;padding:40px 18px;">
   <h1>About {{ biz.name }}</h1>
   <p class="page-sub">Edit this page in <code>app/templates/about.html</code>.</p>
+  {% if dishes %}
+  <h2>Most ordered</h2>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin:12px 0 28px">
+    {% for d in dishes %}
+    <a href="/menu/{{ d.id }}" style="text-decoration:none;color:inherit;border:1px solid #E7E1D6;border-radius:14px;overflow:hidden;background:#fff">
+      <img src="/static/img/dishes/{{ d.id }}.jpg" alt="{{ d.name }}" loading="lazy" width="400" height="300" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block">
+      <div style="padding:10px 12px"><b>{{ d.name }}</b><br><span style="color:#5F645A">₹{{ d.price | int }}</span></div>
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
   <h2>Contact</h2>
   <p>{{ biz.address_full }}<br>{{ biz.phone_display }}<br>{{ biz.email }}</p>
+  <p><a href="https://www.google.com/maps/search/?api=1&query={{ biz.address_commas | urlencode }}" target="_blank" rel="noopener">Open in Google Maps</a></p>
   <h2>Hours</h2>
   <p>{{ biz.hours }}</p>
 </main>

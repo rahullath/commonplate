@@ -50,6 +50,7 @@ app.include_router(qr_router)
 templates = Jinja2Templates(directory="app/templates")
 templates.env.globals["aliases_for"] = seo_aliases.aliases_for
 from . import third_party_ratings  # noqa: E402
+from . import dishnames, photos  # noqa: E402
 templates.env.globals["external_rating"] = third_party_ratings.external
 
 
@@ -81,15 +82,28 @@ def _promo():
     except Exception:
         return None
 templates.env.globals["promo"] = _promo
+
+
+@app.get("/static/img/dishes/{name}")
+def dish_photo_file(name: str):
+    """Dish photos: one added from the kitchen screen wins over the bundled one. Registered
+    before the /static mount below so it is matched first."""
+    if not name.endswith(".jpg"):
+        raise HTTPException(404)
+    p = photos.path_for(name[:-4])
+    if not p:
+        raise HTTPException(404)
+    return FileResponse(p, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=300"})
+
+
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 DISH_PHOTO_DIR = Path("app/static/img/dishes")
 
 
 def dish_photo_ids() -> set[str]:
-    if not DISH_PHOTO_DIR.is_dir():
-        return set()
-    return {p.stem for p in DISH_PHOTO_DIR.glob("*.jpg")}
+    bundled = {p.stem for p in DISH_PHOTO_DIR.glob("*.jpg")} if DISH_PHOTO_DIR.is_dir() else set()
+    return bundled | photos.uploaded_ids()
 
 
 CATEGORY_HERO_DIR = Path("app/static/img/categories")
@@ -700,6 +714,27 @@ def upi_links(amount: float, order_id: int) -> dict:
             "paytm": f"paytmmp://pay?{q}"}
 
 
+@app.post("/api/orders/{ref}/paid-claim")
+def order_paid_claim(ref: str):
+    """The customer tapped "I've paid" on the pay page. Nothing is confirmed by this: it puts the
+    order at the top of the kitchen screen and nudges the kitchen so nobody has to be chased."""
+    o = db.get_order_by_token(ref) if not ref.isdigit() else None
+    if not o:
+        raise HTTPException(404, "Order not found")
+    if o.get("paid") or (o.get("payment_method") or "cod") != "upi" or o.get("status") == "cancelled":
+        return {"ok": True, "noted": False}
+    first = db.claim_paid(o["id"])
+    if first:
+        try:
+            from . import telegram
+            if telegram.enabled():
+                telegram.send_message(f"Order #{o['id']}: {o.get('customer_name') or 'the customer'} says they paid "
+                                      f"₹{float(o.get('total') or 0):g}. Check your bank, then confirm on the kitchen screen.")
+        except Exception:
+            log.exception("paid-claim alert failed for order %s", o["id"])
+    return {"ok": True, "noted": True}
+
+
 @app.get("/pay/{ref}", response_class=HTMLResponse)
 def pay_page(request: Request, ref: str):
     """One-tap UPI payment for an order, by tracking token. The WhatsApp
@@ -723,17 +758,27 @@ def pay_page(request: Request, ref: str):
     items = [f"{int(i.get('qty') or 1)} × {i.get('name')}" for i in (o.get("items") or [])]
     items_text = ", ".join(items[:3]) + (f" and {len(items) - 3} more" if len(items) > 3 else "")
     links = upi_links(amount, o["id"])
-    qr_svg = ""
+    qr_svg = qr_png = ""
     if state == "due":
         try:
             import segno
-            qr_svg = segno.make(links["any"], error="m").svg_inline(scale=5, border=2)
+            code = segno.make(links["any"], error="m")
+            qr_svg = code.svg_inline(scale=5, border=2)
+            qr_png = code.png_data_uri(scale=10, border=3)  # for "Save QR": scan it from the gallery
         except Exception:
             log.exception("UPI QR failed for order %s", o["id"])
     return templates.TemplateResponse(request, "pay.html", {
-        "order": o, "state": state, "amount_text": f"{amount:.2f}".removesuffix(".00"), "qr_svg": qr_svg,
+        "order": o, "state": state, "amount_text": f"{amount:.2f}".removesuffix(".00"), "qr_svg": qr_svg, "qr_png": qr_png,
         "payee": UPI_PAYEE_NAME, "vpa": UPI_VPA, "items_text": items_text or "your order",
         "links": links, "hide_nav": True})
+
+
+def _top_dishes(n: int) -> list[dict]:
+    """Best-selling dishes that have a photo, for the About page."""
+    photos = dish_photo_ids()
+    ranked = sorted((m for m in menu.load_menu() if m["id"] in photos and not m["id"].endswith(menu.HALF_SUFFIX)),
+                    key=lambda m: (not m.get("popular"), -(m.get("qty_2mo") or 0)))
+    return ranked[:n]
 
 
 @app.get("/about", response_class=HTMLResponse)
@@ -747,6 +792,7 @@ def about_page(request: Request):
             "order_count": reviews.get_order_count_display(),
             "google_review_link": GOOGLE_REVIEW_LINK,
             "categories": all_categories(),
+            "dishes": _top_dishes(6),
         },
     )
 
@@ -904,6 +950,16 @@ def service_worker():
     whole site (/, /menu, etc.) to actually control page loads, not just
     /static/ assets."""
     return FileResponse("app/static/sw.js", media_type="application/javascript")
+
+
+@app.middleware("http")
+async def keep_private_pages_out_of_search(request: Request, call_next):
+    """Order tracking and the link-in-bio page are for people who already have the link."""
+    resp = await call_next(request)
+    p = request.url.path
+    if p in ("/bio", "/track") or p.startswith("/track/"):
+        resp.headers["X-Robots-Tag"] = "noindex, follow"
+    return resp
 
 
 @app.get("/robots.txt", response_class=PlainTextResponse)
@@ -1198,7 +1254,7 @@ def admin_menu_lite(x_admin_token: str | None = Header(None)):
     """Everything the kitchen's Menu tab needs: per dish, is it on or sold out today."""
     _check_admin(x_admin_token)
     base = {m["id"]: m for m in menu.base_menu()}
-    photos = dish_photo_ids()
+    have_photo, photos_ver, own = dish_photo_ids(), photos.version, photos.uploaded_ids()
     out = []
     for g in menu.grouped():
         for it in g["items"]:
@@ -1212,7 +1268,8 @@ def admin_menu_lite(x_admin_token: str | None = Header(None)):
                         "half": full.get("half_price"), "original_half": b.get("half_price"),
                         "available": it["available"], "custom": bool(it.get("custom")),
                         "reason": it.get("unavailable_reason"),
-                        "photo": f"/static/img/dishes/{pid}.jpg" if pid in photos else None})
+                        "photo": f"/static/img/dishes/{pid}.jpg?v={photos_ver(pid)}" if pid in have_photo else None,
+                        "own_photo": pid in own})
     return {"items": out, "changes": db.recent_price_changes()}
 
 
@@ -1307,6 +1364,45 @@ def admin_sold_out(body: SoldOutIn, x_admin_token: str | None = Header(None)):
     return {"ok": True}
 
 
+class NameIn(BaseModel):
+    name: str
+
+
+@app.post("/api/admin/check-name")
+def admin_check_name(body: NameIn, x_admin_token: str | None = Header(None)):
+    """Tidy a typed dish name and point out likely slips and look-alikes already on the menu."""
+    _check_admin(x_admin_token)
+    names = [m["name"] for m in menu.load_menu()] + [c["name"] for c in db.list_custom_items()]
+    cleaned = dishnames.clean(body.name)
+    subs = dishnames.suggestions(cleaned, names)
+    fixed = dishnames.apply(cleaned, subs)
+    k = dishnames.key(fixed)
+    dup = next(({"id": m["id"], "name": m["name"]} for m in menu.load_menu()
+                if dishnames.key(m["name"]) == k and not m["id"].endswith(menu.HALF_SUFFIX)), None)
+    return {"clean": cleaned, "suggestions": subs, "corrected": fixed, "duplicate": dup}
+
+
+@app.post("/api/admin/photos/{item_id}")
+async def admin_upload_photo(item_id: str, request: Request, x_admin_token: str | None = Header(None)):
+    """Raw JPEG in the request body (the kitchen screen shrinks it first)."""
+    _check_admin(x_admin_token)
+    if not (menu.get_item(item_id) or menu.get_item(menu._base_id(item_id))):
+        raise HTTPException(404, "Unknown dish")
+    try:
+        photos.save(item_id, await request.body())
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"ok": True, "photo": f"/static/img/dishes/{item_id}.jpg?v={photos.version(item_id)}"}
+
+
+@app.delete("/api/admin/photos/{item_id}")
+def admin_remove_photo(item_id: str, x_admin_token: str | None = Header(None)):
+    _check_admin(x_admin_token)
+    if not photos.remove(item_id):
+        raise HTTPException(404, "No photo of yours to remove")
+    return {"ok": True}
+
+
 class CustomItemIn(BaseModel):
     name: str
     price: float
@@ -1319,7 +1415,7 @@ def admin_add_custom_item(body: CustomItemIn, x_admin_token: str | None = Header
     """Add a dish by hand. It lives outside menu.json and the POS catalogue, so
     it can never clash with a POS item; orders containing it are not sent to the POS."""
     _check_admin(x_admin_token)
-    name = " ".join(body.name.split())[:60]
+    name = dishnames.clean(body.name)[:60]
     if not name:
         raise HTTPException(400, "Give the dish a name")
     if not 0 < body.price <= 5000:
@@ -1487,6 +1583,10 @@ def admin_update_order_status(order_id: int, body: StatusIn,
         raise HTTPException(404, "Order not found")
     current = o["status"]
     target = body.status
+    if target == current:
+        # The POS often moves an order before the kitchen screen does; tapping the same
+        # step again is not an error and must not notify the customer twice.
+        return {"ok": True, "order_id": order_id, "from": current, "to": target, "unchanged": True}
     allowed = VALID_TRANSITIONS.get(current, [])
     if target not in allowed:
         raise HTTPException(400, f"Cannot move from '{current}' to '{target}'. Allowed: {allowed}")

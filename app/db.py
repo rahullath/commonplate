@@ -179,6 +179,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE orders ADD COLUMN petpooja_order_id TEXT")
     if not _has_col("orders", "petpooja_synced_at"):
         conn.execute("ALTER TABLE orders ADD COLUMN petpooja_synced_at TEXT")
+    if not _has_col("orders", "paid_claimed_at"):
+        conn.execute("ALTER TABLE orders ADD COLUMN paid_claimed_at TEXT")
     if not _has_col("orders", "tracking_token"):
         conn.execute("ALTER TABLE orders ADD COLUMN tracking_token TEXT")
     if not _has_col("orders", "scheduled_window"):
@@ -1103,3 +1105,13 @@ def recent_price_changes(limit: int = 15) -> list[dict]:
                         "ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def claim_paid(order_id: int) -> bool:
+    """Record that the customer says they paid. True only the first time."""
+    conn = get_conn()
+    n = conn.execute("UPDATE orders SET paid_claimed_at=datetime('now') WHERE id=? AND paid_claimed_at IS NULL",
+                     (order_id,)).rowcount
+    conn.commit()
+    conn.close()
+    return bool(n)

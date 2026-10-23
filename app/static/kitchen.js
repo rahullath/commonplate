@@ -7,7 +7,12 @@
   let token = null, data = null, seen = null, soundOn = false, audio = null;
   let tab = "orders", oid = null, sheet = null, showDone = false, lastOk = 0;
   let shopItems = null, shopChanges = [], shopQ = "", editId = null;
-  const shopDraft = { name: "", price: "", reason: "", onlyToday: true };
+  let claimed = null;  // orders whose customer has tapped "I've paid"
+  const openGroups = new Set();  // Menu tab: which sections are unfolded
+  // The "add a special" form. photo is a shrunken JPEG blob, review holds the spelling check result.
+  const special = { open: false, name: "", price: "", onlyToday: true, photo: null, photoUrl: "", review: null, busy: false };
+  let photoTarget = null;  // dish id the next picked picture is for
+  const shopDraft = { reason: "" };
   const drafts = {};  // per-order rider paste/fare typed but not yet sent
   let focusId = +((/^\/kitchen\/o\/(\d+)/.exec(location.pathname) || [])[1]) || null;
   try { token = localStorage.getItem(TOKEN_KEY); soundOn = localStorage.getItem(SOUND_KEY) === "1"; } catch (_) {}
@@ -28,7 +33,8 @@
   const WINDOWS = { lunch: "Lunch (12:00–2:30)", dinner: "Dinner (6:30–9:30)" };
   const STATUS = { new: "New", preparing: "Cooking", ready: "Packed", out_for_delivery: "On the way", delivered: "Delivered", cancelled: "Cancelled" };
   const OPEN = ["new", "preparing", "ready", "out_for_delivery"];
-  const needsMoney = (o) => (o.payment_method === "upi" && !o.paid && o.status !== "cancelled" && o.status !== "delivered") ? 1 : 0;
+  // 2 when the customer has tapped "I've paid" (look at these first), 1 when still waiting, 0 when nothing to check.
+  const needsMoney = (o) => (o.payment_method === "upi" && !o.paid && o.status !== "cancelled" && o.status !== "delivered") ? (o.paid_claimed_at ? 2 : 1) : 0;
   const offPos = (o) => (o.items || []).some((i) => String(i.item_id || "").startsWith("sp-"));
   const ICON = {
     orders: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 4h14v16H5zM9 9h6M9 13h6M9 17h3"/></svg>',
@@ -189,7 +195,7 @@
         <div class="oc-h"><span class="oc-id">#${o.id} · ${o.order_type === "pickup" ? "Pickup" : "Delivery"}</span><span class="oc-st ${o.status}">${STATUS[o.status] || o.status}</span></div>
         <div class="oc-i">${esc(summaryItems(o))}</div>
         <div class="oc-m">${esc(firstName(o))} · due ${time(dueOf(o))} · ${o.payment_method === "upi" ? (o.paid ? "Paid " : "UPI ") : "Cash "}${rs(o.total)}</div>
-        ${needsMoney(o) ? `<span class="chipwarn">Check payment</span> ` : ""}${offPos(o) ? `<span class="chipwarn">Ring up on POS</span> ` : ""}${note ? `<span class="chipwarn">Has a note</span>` : ""}
+        ${needsMoney(o) ? `<span class="chipwarn">${o.paid_claimed_at ? "Says they paid" : "Check payment"}</span> ` : ""}${offPos(o) ? `<span class="chipwarn">Ring up on POS</span> ` : ""}${note ? `<span class="chipwarn">Has a note</span>` : ""}
       </button>`;
     }).join("");
     return `${topbar("Orders")}<main class="list">${closedStrip()}
@@ -214,7 +220,7 @@
   function payCard(o) {
     if (!needsMoney(o)) return "";
     const total = rs(o.total);
-    return `<div class="box paycard"><div class="q">Did ${esc(firstName(o))} pay ${total}?</div>
+    return `<div class="box paycard"><div class="q">${o.paid_claimed_at ? `${esc(firstName(o))} says they paid ${total}.` : `Did ${esc(firstName(o))} pay ${total}?`}</div>
       <div class="s">Open GPay or PhonePe and look for <b>${total}</b>. Tap green only when you can see it.</div>
       <button class="big" data-paid="${o.id}">Yes, I got ${total}</button>
       <button class="big ghost" data-paylink="${o.id}">Send payment link on WhatsApp</button>
@@ -293,24 +299,56 @@
       ${d.half ? `<div class="field"><label for="pe-half">Half portion</label><input id="pe-half" inputmode="decimal" value="${d.half}"></div>` : ""}
       <div class="grid2"><button class="big ghost" data-pe="cancel">Cancel</button><button class="big" data-pe="save" data-id="${esc(d.id)}">Save price</button></div>
       ${d.price !== d.original || (d.half && d.half !== d.original_half) ? `<button class="btn" data-pe="reset" data-id="${esc(d.id)}">Back to ${rs(d.original)}</button>` : ""}
-      <div class="tells">Photos can be changed from the admin page for now.</div></div>`;
+</div>`;
+  }
+  function dishCard(d) {
+    if (d.id === editId) return priceEditor(d);
+    const pic = d.photo
+      ? `<button class="ph" data-photo="${esc(d.id)}" aria-label="Change the photo of ${esc(d.name)}"><img src="${esc(d.photo)}" alt="" loading="lazy"><i>Change</i></button>`
+      : `<button class="ph none" data-photo="${esc(d.id)}" aria-label="Add a photo of ${esc(d.name)}"><b>＋</b>Photo</button>`;
+    const note = d.reason ? esc(d.reason) : d.price !== d.original ? `Changed, was ${rs(d.original)}` : "";
+    return `<article class="dish2 ${d.available ? "" : "off"}">
+      <div class="drow">${pic}<div class="dn">${d.custom ? "⭐ " : ""}${esc(d.name)}${note ? `<span>${note}</span>` : ""}</div></div>
+      <div class="dacts">
+        ${d.custom ? `<button class="price" data-rm="${esc(d.id)}">Remove</button>` : `<button class="price" data-edit="${esc(d.id)}" aria-label="Change price of ${esc(d.name)}">${rs(d.price)} ✎</button>`}
+        ${d.reason ? "" : `<button class="tog ${d.available ? "on" : "so"}" data-so="${esc(d.id)}" data-now="${d.available ? 1 : 0}">${d.available ? "On" : "Sold out"}</button>`}
+      </div></article>`;
+  }
+  function specialForm() {
+    const r = special.review;
+    const pic = special.photoUrl
+      ? `<button class="sp-photo has" data-photo="__special" aria-label="Change the photo"><img src="${esc(special.photoUrl)}" alt=""><i>Change photo</i></button>`
+      : `<button class="sp-photo" data-photo="__special"><b>📷</b>Add a photo<span>Take one now, or pick from your phone</span></button>`;
+    const review = !r ? "" : `<div class="review">
+      ${r.suggestions.length ? `<div class="rq">Did you mean <b>“${esc(r.corrected)}”</b>?</div>
+        <button class="big" data-sp="use-fix">Yes, use “${esc(r.corrected)}”</button>
+        <button class="big ghost" data-sp="keep">No, keep “${esc(r.clean)}”</button>` : ""}
+      ${r.duplicate && !r.suggestions.length ? `<div class="rq">“${esc(r.duplicate.name)}” is already on the menu.</div>
+        <button class="big" data-sp="use-existing">Show me that one</button>
+        <button class="big ghost" data-sp="keep">Add mine anyway</button>` : ""}</div>`;
+    return `<div class="box sp"><h3>New special</h3>${pic}
+      <div class="field"><label for="sp-name">Dish name</label><input id="sp-name" class="in" data-sp-in="name" autocapitalize="words" autocomplete="off" placeholder="e.g. Mango Lassi" value="${esc(special.name)}"></div>
+      <div class="field"><label for="sp-price">Price (₹)</label><input id="sp-price" class="in" data-sp-in="price" inputmode="decimal" placeholder="e.g. 120" value="${esc(special.price)}"></div>
+      <label class="chk"><input type="checkbox" data-sp-in="onlyToday" ${special.onlyToday ? "checked" : ""}> Only today</label>
+      ${review}
+      ${r ? "" : `<div class="grid2"><button class="big ghost" data-sp="cancel">Cancel</button><button class="big" id="addspecial" ${special.busy ? "disabled" : ""}>${special.busy ? "Saving…" : "Put on menu"}</button></div>`}
+      <div class="tells">Customers can order it straight away. It does not go to Petpooja, so ring it up on the POS yourself.</div></div>`;
   }
   function menuView(g) {
-    const q = shopQ.trim().toLowerCase(), list = (shopItems || []).filter((d) => !q || d.name.toLowerCase().includes(q));
-    const rows = shopItems === null ? `<div class="empty">Loading dishes…</div>` : list.length ? list.slice(0, 80).map((d) => d.id === editId ? priceEditor(d) : `<div class="dish ${d.available ? "" : "off"}">
-        ${d.photo ? `<img class="thumb" src="${esc(d.photo)}" alt="" loading="lazy">` : `<div class="thumb none">No photo</div>`}
-        <div class="dn">${d.custom ? "⭐ " : ""}${esc(d.name)}<span>${d.reason ? esc(d.reason) : d.price !== d.original ? `Changed, was ${rs(d.original)}` : ""}</span></div>
-        ${d.custom ? `<button class="price" data-rm="${esc(d.id)}">Remove</button>` : `<button class="price" data-edit="${esc(d.id)}" aria-label="Change price of ${esc(d.name)}">${rs(d.price)} ✎</button>`}
-        ${d.reason ? "" : `<button class="tog ${d.available ? "on" : "so"}" data-so="${esc(d.id)}" data-now="${d.available ? 1 : 0}">${d.available ? "On" : "Sold out"}</button>`}</div>`).join("") + (list.length > 80 ? `<div class="tells">Showing 80. Type to search.</div>` : "") : `<div class="empty">No dish matches.</div>`;
-    return `${topbar("Menu")}<input class="in search" data-shop="q" placeholder="Search a dish" value="${esc(shopQ)}" aria-label="Search a dish">
-      <main class="list">${rows}
-      <div class="box"><h3>Add a special</h3>
-        <input class="in" data-shop="name" placeholder="Dish name, e.g. Mango Lassi" value="${esc(shopDraft.name)}">
-        <input class="in" data-shop="price" inputmode="decimal" placeholder="Price in rupees" value="${esc(shopDraft.price)}">
-        <label style="display:flex;gap:10px;align-items:center;font-weight:700"><input type="checkbox" data-shop="onlyToday" ${shopDraft.onlyToday ? "checked" : ""} style="width:26px;height:26px"> Only today</label>
-        <button class="big" id="addspecial">Put on the menu</button>
-        <div class="tells">Customers can order it right away. It does not go to Petpooja, so ring it up on the POS yourself.</div></div>
-      </main>${tabbar(g)}`;
+    const q = shopQ.trim().toLowerCase(), all = shopItems || [];
+    const specials = all.filter((d) => d.custom);
+    const regular = all.filter((d) => !d.custom && (!q || d.name.toLowerCase().includes(q) || (d.group || "").toLowerCase().includes(q)));
+    const groupsOrder = [...new Set(regular.map((d) => d.group))];
+    const body = shopItems === null ? `<div class="empty">Loading dishes…</div>` : groupsOrder.length ? groupsOrder.map((gr) => {
+      const rows = regular.filter((d) => d.group === gr), open = q || openGroups.has(gr);
+      return `<section class="grp"><button class="gh" data-grp="${esc(gr)}" aria-expanded="${open ? "true" : "false"}"><span>${esc(gr)}</span><em>${rows.length}</em><i>${open ? "▲" : "▼"}</i></button>${open ? rows.map(dishCard).join("") : ""}</section>`;
+    }).join("") : `<div class="empty">No dish matches “${esc(shopQ)}”.</div>`;
+    const spBlock = special.open ? specialForm() : `<div class="box sp"><button class="big" data-sp="open">＋ Add today's special</button>
+      ${specials.length ? `<div class="spl">${specials.map(dishCard).join("")}</div>` : `<div class="tells">Nothing special added yet.</div>`}</div>`;
+    return `${topbar("Menu")}<main class="list menu">${spBlock}
+      <input class="in search" data-shop="q" placeholder="Search a dish" value="${esc(shopQ)}" aria-label="Search a dish" autocomplete="off">
+      <div class="tells hint">Tap a picture to add or change it. Tap the price to change it.</div>
+      ${body}</main>${tabbar(g)}<input type="file" id="photo-input" accept="image/*" hidden>`;
   }
   function shopView(g) {
     const st = (data && data.store) || { is_open: true };
@@ -361,6 +399,61 @@
   // ---------- actions
   const DONE_MSG = (id) => ({ preparing: `Order #${id} accepted. Customer told.`, ready: `#${id} marked packed. Customer told.`, delivered: `#${id} done 🎉`, cancelled: `#${id} cancelled. Customer told.` });
   function setStatus(btn, id, st) { return act(btn, () => api(`/api/admin/orders/${id}/status`, { method: "POST", body: JSON.stringify({ status: st }) }), DONE_MSG(id)[st]); }
+  // ---------- photos and specials
+  // Shrink the picture on the phone first: a camera photo is several MB, the menu needs about 100 KB.
+  async function shrink(file) {
+    let bmp;
+    try { bmp = await createImageBitmap(file, { imageOrientation: "from-image" }); }
+    catch (_) {
+      bmp = await new Promise((ok, no) => { const im = new Image(), u = URL.createObjectURL(file); im.onload = () => ok(im); im.onerror = no; im.src = u; });
+    }
+    const w = bmp.width || bmp.naturalWidth, h = bmp.height || bmp.naturalHeight, k = Math.min(1, 1200 / Math.max(w, h));
+    const c = document.createElement("canvas"); c.width = Math.round(w * k); c.height = Math.round(h * k);
+    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+    return new Promise((ok, no) => c.toBlob((b) => b ? ok(b) : no(new Error("shrink")), "image/jpeg", 0.82));
+  }
+  async function uploadPhoto(id, blob) {
+    const res = await fetch("/api/admin/photos/" + encodeURIComponent(id), { method: "POST", headers: { "X-Admin-Token": token, "Content-Type": "image/jpeg" }, body: blob });
+    if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.detail || "Couldn't save the photo."); }
+  }
+  async function takePhoto(file) {
+    try {
+      toast("Getting the photo ready…");
+      const blob = await shrink(file);
+      if (photoTarget === "__special") { special.photo = blob; if (special.photoUrl) URL.revokeObjectURL(special.photoUrl); special.photoUrl = URL.createObjectURL(blob); render(); toast("Photo added."); return; }
+      await uploadPhoto(photoTarget, blob); toast("Photo saved. Customers see it now."); await loadShop();
+    } catch (e) { toast(e.message && e.message !== "shrink" ? e.message : "Couldn't use that picture. Try another.", 5000); }
+  }
+  function resetSpecial() { if (special.photoUrl) URL.revokeObjectURL(special.photoUrl); Object.assign(special, { open: false, name: "", price: "", onlyToday: true, photo: null, photoUrl: "", review: null, busy: false }); }
+  async function saveSpecial(name, btn) {
+    special.busy = true; render();
+    try {
+      const r = await api("/api/admin/custom-items", { method: "POST", body: JSON.stringify({ name, price: parseFloat(special.price), only_today: special.onlyToday }) });
+      if (special.photo) { try { await uploadPhoto(r.id, special.photo); } catch (e) { toast("Added, but the photo didn't save. Tap “＋ Photo” on it to try again.", 6000); } }
+      resetSpecial(); await loadShop(); toast("Added. Customers can order it now.");
+    } catch (e) { special.busy = false; render(); if (e.message !== "auth") toast(e.message, 5000); }
+  }
+  async function specialAction(b, force) {
+    const act2 = force || b.dataset.sp;
+    if (act2 === "open") { special.open = true; render(); const n = document.getElementById("sp-name"); if (n) n.focus(); return; }
+    if (act2 === "cancel") { resetSpecial(); render(); return; }
+    if (act2 === "use-existing") { const d = special.review.duplicate; resetSpecial(); shopQ = d.name; render(); window.scrollTo(0, 0); return; }
+    if (act2 === "use-fix") { const n = special.review.corrected; special.name = n; special.review = null; return saveSpecial(n, b); }
+    if (act2 === "keep") { const n = special.review.clean; special.review = null; return saveSpecial(n, b); }
+    if (act2 === "check") {
+      const price = parseFloat(special.price);
+      if (!special.name.trim()) { toast("Type the dish name."); return; }
+      if (!(price > 0)) { toast("Type the price in rupees."); return; }
+      b.disabled = true;
+      try {
+        const r = await api("/api/admin/check-name", { method: "POST", body: JSON.stringify({ name: special.name }) });
+        special.name = r.clean;
+        if (r.suggestions.length || r.duplicate) { special.review = r; render(); return; }
+        return saveSpecial(r.clean, b);
+      } catch (e) { b.disabled = false; if (e.message !== "auth") toast(e.message, 5000); }
+    }
+  }
+
   function bind() {
     const bk = document.getElementById("back"); if (bk) bk.onclick = () => { oid = null; render(); window.scrollTo(0, 0); };
     app.querySelectorAll("[data-tab]").forEach((b) => b.onclick = () => goTab(b.dataset.tab));
@@ -434,13 +527,14 @@
       act(b, () => api("/api/admin/store", { method: "POST", body: JSON.stringify({ is_open: false, mode, hours: h ? +h : null, reason: shopDraft.reason }) }).then((r) => { shopDraft.reason = ""; if (data) data.store = r; }), "Online orders are off.");
     });
     app.querySelectorAll("[data-open-shop]").forEach((b) => b.onclick = () => act(b, () => api("/api/admin/store", { method: "POST", body: JSON.stringify({ is_open: true }) }).then((r) => { if (data) data.store = r; }), "Online orders are back on."));
-    const sp = document.getElementById("addspecial");
-    if (sp) sp.onclick = () => {
-      const price = parseFloat(shopDraft.price);
-      if (!shopDraft.name.trim()) { toast("Type the dish name."); return; }
-      if (!(price > 0)) { toast("Type the price in rupees."); return; }
-      act(sp, () => api("/api/admin/custom-items", { method: "POST", body: JSON.stringify({ name: shopDraft.name, price, only_today: shopDraft.onlyToday }) }).then(async () => { shopDraft.name = ""; shopDraft.price = ""; await loadShop(); }), "Added. Customers can order it now.");
-    };
+    app.querySelectorAll("[data-grp]").forEach((b) => b.onclick = () => { const g = b.dataset.grp; openGroups.has(g) ? openGroups.delete(g) : openGroups.add(g); render(); });
+    app.querySelectorAll("[data-photo]").forEach((b) => b.onclick = () => { photoTarget = b.dataset.photo; const f = document.getElementById("photo-input"); if (f) { f.value = ""; f.click(); } });
+    const pf = document.getElementById("photo-input"); if (pf) pf.onchange = () => { if (pf.files && pf.files[0]) takePhoto(pf.files[0]); };
+    app.querySelectorAll("[data-sp-in]").forEach((i) => i.oninput = () => {
+      const k = i.dataset.spIn; if (k === "onlyToday") special.onlyToday = i.checked; else special[k] = i.value; special.review = null;
+    });
+    app.querySelectorAll("[data-sp]").forEach((b) => b.onclick = () => specialAction(b));
+    const spb = document.getElementById("addspecial"); if (spb) spb.onclick = () => specialAction(spb, "check");
     app.querySelectorAll("[data-so]").forEach((b) => b.onclick = () => act(b, () => api("/api/admin/sold-out", { method: "POST", body: JSON.stringify({ item_id: b.dataset.so, sold_out: b.dataset.now === "1" }) }).then(loadShop), b.dataset.now === "1" ? "Marked sold out." : "Back on the menu."));
     app.querySelectorAll("[data-edit]").forEach((b) => b.onclick = () => { editId = b.dataset.edit; render(); const i = document.getElementById("pe-price"); if (i) { i.focus(); i.select(); } });
     app.querySelectorAll("[data-rm]").forEach((b) => b.onclick = () => act(b, () => api("/api/admin/custom-items/" + encodeURIComponent(b.dataset.rm), { method: "DELETE" }).then(loadShop), "Removed."));
@@ -469,6 +563,9 @@
     lastOk = Date.now();
     const newOnes = seen ? fresh.orders.filter((o) => !seen.has(o.id) && o.status === "new") : [];
     const firstLoad = !seen;
+    const claimedNow = new Set(fresh.orders.filter((o) => o.paid_claimed_at && !o.paid).map((o) => o.id));
+    const newClaims = claimed ? [...claimedNow].filter((id) => !claimed.has(id)) : [];
+    claimed = claimedNow;
     seen = new Set(fresh.orders.map((o) => o.id)); data = fresh;
     if (firstLoad && focusId) {
       if (fresh.orders.some((o) => o.id === focusId)) { tab = "orders"; oid = focusId; } else toast(`Order #${focusId} isn't open any more.`);
@@ -476,6 +573,7 @@
     }
     const typing = !force && document.activeElement && document.activeElement.matches("input, textarea");
     if (typing) renderBanner(); else render();   // the banner still updates while she types
+    if (newClaims.length && !newOnes.length) { ring(); toast(`Order #${newClaims[0]}: customer says they paid. Check your bank.`, 6000); }
     if (newOnes.length) {
       ring();
       document.title = "🔔 New order · Kitchen"; setTimeout(() => { document.title = "Kitchen"; }, 15000);

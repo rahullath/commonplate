@@ -29,6 +29,23 @@
   .pay-btn .go { margin-left: auto; font: 600 11px/1 'IBM Plex Mono', monospace; color: #0E7A45; }
   .pay-btn.primary { border: 2px solid #171A14; }
   .pay-ico { width: 34px; height: 34px; border-radius: 8px; background: #F3EFE7; display: flex; align-items: center; justify-content: center; font: 700 12px/1 'IBM Plex Mono', monospace; color: #5C6157; flex: none; }
+  .pay-body { display: flex; flex-direction: column; }
+  .inapp .pay-scan { order: -1; margin-top: 16px; }
+  .inapp .pay-apps-wrap { order: 1; }
+  .pay-scan { margin-top: 18px; padding: 18px 16px; border-radius: 16px; background: #F3EFE7; text-align: center; }
+  .pay-scan h3 { margin: 0; font-size: 16px; }
+  .pay-scan .s { font-size: 13.5px; color: #5C6157; margin-top: 4px; line-height: 1.45; }
+  .pay-scan img { width: 210px; height: 210px; max-width: 70vw; max-height: 70vw; background: #fff; border-radius: 12px; margin: 14px auto 0; display: block; image-rendering: pixelated; }
+  .pay-scan ol { text-align: left; margin: 14px 0 0; padding-left: 20px; font-size: 14px; line-height: 1.55; }
+  .pay-scan-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+  .pay-scan-btns .wide { grid-column: 1 / -1; }
+  .pay-mini { min-height: 48px; border-radius: 12px; border: 1.5px solid #171A14; background: #fff; font-size: 15px; font-weight: 600; color: #171A14; cursor: pointer; }
+  .pay-mini.main { background: #171A14; color: #fff; }
+  .pay-note { margin-top: 10px; font-size: 13px; color: #0E7A45; font-weight: 600; min-height: 18px; }
+  .pay-inapp { display: none; margin-top: 22px; padding: 14px 16px; border-radius: 14px; background: #FBF0DE; color: #7A4A05; font-size: 14.5px; line-height: 1.5; }
+  .inapp .pay-inapp { display: block; }
+  .pay-inapp b { color: #5C3500; }
+  .pay-inapp button { margin-top: 10px; width: 100%; }
   .pay-other { display: flex; gap: 14px; align-items: center; margin-top: 16px; padding: 14px; border-radius: 14px; background: #F3EFE7; }
   .pay-qr { width: 76px; height: 76px; border-radius: 10px; background: #fff; flex: none; overflow: hidden; }
   .pay-qr svg { width: 76px; height: 76px; display: block; }
@@ -66,17 +83,40 @@
       <div class="pay-head"><div class="lbl">Amount due</div></div>
       <div class="pay-amount">₹{{ amount_text }}</div>
       <p class="pay-sub">to <b>{{ payee }}</b> for {{ items_text }}</p>
-      <div class="pay-label">PAY WITH</div>
-      <div class="pay-apps">
-        <a class="pay-btn primary" id="pay-any" href="{{ links.any }}"><span class="pay-ico">UPI</span>Any UPI app<span class="go">OPENS APP →</span></a>
-        <a class="pay-btn" id="pay-gpay" href="{{ links.gpay_android }}" data-ios="{{ links.gpay_ios }}"><span class="pay-ico">G</span>Google Pay</a>
-        <a class="pay-btn" href="{{ links.phonepe }}"><span class="pay-ico">Pe</span>PhonePe</a>
-        <a class="pay-btn" href="{{ links.paytm }}"><span class="pay-ico">Pt</span>Paytm</a>
+      <div class="pay-inapp" id="inapp">
+        <b>This page is open inside another app.</b> Those browsers often block payment apps, so the buttons below may do nothing.
+        <span id="inapp-android" hidden>Open it in Chrome to pay in one tap, or use the QR below.</span>
+        <span id="inapp-ios" hidden>Tap the browser icon at the bottom right to open it in Safari, or use the QR below.</span>
+        <button type="button" class="pay-mini main" id="open-browser" hidden>Open in Chrome</button>
+        <button type="button" class="pay-mini" id="copy-link">Copy page link</button>
       </div>
-      <div class="pay-other">
-        {% if qr_svg %}<div class="pay-qr" aria-label="UPI QR code">{{ qr_svg | safe }}</div>{% endif %}
-        <div><b>Paying from another phone?</b><div class="s">Scan, or copy the UPI ID</div>
-          <div class="pay-vpa"><span id="vpa">{{ vpa }}</span><button type="button" id="copy-vpa">Copy</button></div></div>
+      <div class="pay-body">
+        <div class="pay-apps-wrap">
+          <div class="pay-label">PAY WITH</div>
+          <div class="pay-apps">
+            <a class="pay-btn primary" id="pay-any" href="{{ links.any }}"><span class="pay-ico">UPI</span>Any UPI app<span class="go">OPENS APP →</span></a>
+            <a class="pay-btn" id="pay-gpay" href="{{ links.gpay_android }}" data-ios="{{ links.gpay_ios }}"><span class="pay-ico">G</span>Google Pay</a>
+            <a class="pay-btn" href="{{ links.phonepe }}"><span class="pay-ico">Pe</span>PhonePe</a>
+            <a class="pay-btn" href="{{ links.paytm }}"><span class="pay-ico">Pt</span>Paytm</a>
+          </div>
+        </div>
+        <div class="pay-scan" id="pay-scan">
+          <h3>App didn't open? Pay with the QR</h3>
+          <div class="s">Works on this phone too. Save the QR, then scan it from your gallery.</div>
+          {% if qr_png %}<img id="qr-img" src="{{ qr_png }}" alt="UPI QR code for ₹{{ amount_text }}" width="210" height="210">{% endif %}
+          <div class="pay-scan-btns">
+            {% if qr_png %}<button type="button" class="pay-mini main wide" id="save-qr">Save QR to my phone</button>{% endif %}
+            <button type="button" class="pay-mini" id="copy-amt">Copy ₹{{ amount_text }}</button>
+            <button type="button" class="pay-mini" id="copy-vpa-btn">Copy UPI ID</button>
+          </div>
+          <div class="pay-note" id="pay-note" role="status"></div>
+          <ol>
+            <li>Tap <b>Save QR to my phone</b>.</li>
+            <li>Open GPay, PhonePe or Paytm and choose <b>Scan</b>, then the <b>gallery</b> icon.</li>
+            <li>Pick the saved QR. The amount is already filled in. Pay, then come back and tap <b>I've paid</b>.</li>
+          </ol>
+          <div class="pay-vpa" style="justify-content:center">UPI ID: <span id="vpa">{{ vpa }}</span></div>
+        </div>
       </div>
     {% endif %}
     {% if state not in ("due", "paid") %}<div class="pay-links"><a href="/track/{{ order.tracking_token }}">Track your order →</a></div>{% endif %}
@@ -84,7 +124,7 @@
 </div>
 {% if state == "due" %}
 <div class="pay-foot"><div class="pay-foot-in">
-  <a class="pay-ivepaid" href="/track/{{ order.tracking_token }}">I've paid</a>
+  <a class="pay-ivepaid" id="ivepaid" href="/track/{{ order.tracking_token }}">I've paid</a>
   <p>The kitchen confirms on WhatsApp within a few minutes.</p>
 </div></div>
 {% endif %}
@@ -93,6 +133,40 @@
   (function () {
     var ua = navigator.userAgent || "";
     var isIOS = /iPhone|iPad|iPod/i.test(ua), isAndroid = /Android/i.test(ua);
+    // WhatsApp, Instagram, Facebook and other in-app browsers: they usually block upi:// and app links.
+    var inApp = /WA4A|WAiOS|FBAN|FBAV|FB_IAB|Instagram|Line\/|MicroMessenger|; wv\)/i.test(ua);
+    var note = document.getElementById("pay-note");
+    function say(msg) { if (note) note.textContent = msg; }
+    function copyText(txt, done) {
+      function fallback() {
+        try {
+          var ta = document.createElement("textarea"); ta.value = txt; ta.setAttribute("readonly", "");
+          ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta); ta.select();
+          var ok = document.execCommand("copy"); document.body.removeChild(ta);
+          say(ok ? done : "Press and hold the text to copy it.");
+        } catch (e) { say("Press and hold the text to copy it."); }
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function () { say(done); }, fallback);
+      else fallback();
+    }
+
+    if (inApp) {
+      document.querySelector(".pay-wrap").classList.add("inapp");
+      if (isAndroid) {
+        document.getElementById("inapp-android").hidden = false;
+        var ob = document.getElementById("open-browser"); ob.hidden = false;
+        ob.addEventListener("click", function () {
+          location.href = "intent://" + location.host + location.pathname + location.search +
+            "#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=" + encodeURIComponent(location.href) + ";end";
+        });
+      } else {
+        document.getElementById("inapp-ios").hidden = false;
+      }
+      document.getElementById("copy-link").addEventListener("click", function () {
+        copyText(location.href, "Link copied. Paste it in Chrome or Safari.");
+      });
+    }
+
     if (isIOS) {
       document.querySelectorAll("[data-ios]").forEach(function (a) { a.style.display = "none"; });
       var g = document.getElementById("pay-gpay"); if (g) g.style.display = "none";
@@ -100,16 +174,44 @@
       var any = document.getElementById("pay-any");
       any.href = {{ links.gpay_ios | tojson }}; any.textContent = "Pay with GPay";
     }
-    document.getElementById("copy-vpa").addEventListener("click", function () {
-      var v = document.getElementById("vpa").textContent;
-      (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(function () {
-        document.getElementById("copy-vpa").textContent = "Copied";
-      }).catch(function () {});
+
+    document.getElementById("copy-vpa-btn").addEventListener("click", function () {
+      copyText(document.getElementById("vpa").textContent, "UPI ID copied.");
     });
-    // Android: open the UPI app chooser straight away (once per visit).
+    document.getElementById("copy-amt").addEventListener("click", function () {
+      copyText({{ amount_text | tojson }}, "Amount copied: ₹{{ amount_text }}");
+    });
+
+    // Tell the kitchen, then go to the tracking page. Never block the customer on the request.
+    var ip = document.getElementById("ivepaid");
+    if (ip) ip.addEventListener("click", function (e) {
+      e.preventDefault();
+      var go = function () { location.href = ip.href; };
+      try { fetch("/api/orders/{{ order.tracking_token }}/paid-claim", { method: "POST", keepalive: true }).then(go, go); setTimeout(go, 1500); }
+      catch (err) { go(); }
+    });
+
+    var save = document.getElementById("save-qr"), img = document.getElementById("qr-img");
+    if (save && img) save.addEventListener("click", function () {
+      var name = "pay-order-{{ order.id }}.png";
+      function download() {
+        var a = document.createElement("a"); a.href = img.src; a.download = name;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        say("Saved. If you can't find it, press and hold the QR and choose Save image.");
+      }
+      fetch(img.src).then(function (r) { return r.blob(); }).then(function (blob) {
+        var file = new File([blob], name, { type: "image/png" });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          navigator.share({ files: [file], title: "Payment QR" }).then(function () { say("Choose Save image, then scan it from your UPI app."); },
+            function (e) { if (!e || e.name !== "AbortError") download(); });
+        } else download();
+      }).catch(function () { say("Press and hold the QR and choose Save image."); });
+    });
+
+    // Android outside an in-app browser: open the UPI app chooser straight away (once per visit).
     var seen = false;
     try { seen = !!sessionStorage.getItem("tf-pay-{{ order.id }}"); sessionStorage.setItem("tf-pay-{{ order.id }}", "1"); } catch (e) {}
-    if (isAndroid && !seen) {
+    if (isAndroid && !inApp && !seen) {
       setTimeout(function () { location.href = {{ links.any | tojson }}; }, 350);
     }
   })();
