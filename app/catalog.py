@@ -56,9 +56,9 @@ FILL_DESCRIPTIONS = {
 
 
 def dish_photo_ids() -> set[str]:
-    if not DISH_PHOTO_DIR.is_dir():
-        return set()
-    return {p.stem for p in DISH_PHOTO_DIR.glob("*.jpg")}
+    from . import photos
+    bundled = {p.stem for p in DISH_PHOTO_DIR.glob("*.jpg")} if DISH_PHOTO_DIR.is_dir() else set()
+    return bundled | photos.uploaded_ids()
 
 
 def card_ids() -> set[str]:
